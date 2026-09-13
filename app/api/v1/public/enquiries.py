@@ -74,7 +74,7 @@ def submit_enquiry(
         enquiry = enquiry_service.create_enquiry(db, form, payload.answers)
     except enquiry_service.EnquiryError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
 
     # Recipients and wording are resolved here, while the session and the data

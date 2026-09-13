@@ -13,6 +13,7 @@ from app.api.v1.admin import enquiries as admin_enquiries
 from app.api.v1.admin import faq as admin_faq
 from app.api.v1.admin import invites as admin_invites
 from app.api.v1.admin import services as admin_services
+from app.api.v1.admin import settings as admin_settings
 from app.api.v1.admin import tasks as admin_tasks
 from app.api.v1.auth import routes as auth_routes
 from app.api.v1.portal import tasks as portal_tasks
@@ -55,5 +56,6 @@ staff_router.include_router(admin_enquiries.router)
 staff_router.include_router(admin_faq.router)
 staff_router.include_router(admin_clients.router)
 staff_router.include_router(admin_tasks.router)
+staff_router.include_router(admin_settings.router)
 
 api_router.include_router(staff_router)
