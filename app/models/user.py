@@ -49,8 +49,16 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # it no longer matches, so revocation does not need a session table.
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # The foreign key is ON DELETE CASCADE, so the ORM must be told as much.
+    # Without this it tries to null clients.user_id on delete and fails against
+    # a NOT NULL column — a confusing IntegrityError in place of a cascade.
     client: Mapped[Client | None] = relationship(
-        "Client", back_populates="user", foreign_keys="Client.user_id", uselist=False
+        "Client",
+        back_populates="user",
+        foreign_keys="Client.user_id",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 
