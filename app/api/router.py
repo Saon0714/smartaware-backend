@@ -13,11 +13,13 @@ from app.api.v1.admin import documents as admin_documents
 from app.api.v1.admin import enquiries as admin_enquiries
 from app.api.v1.admin import faq as admin_faq
 from app.api.v1.admin import invites as admin_invites
+from app.api.v1.admin import notes as admin_notes
 from app.api.v1.admin import services as admin_services
 from app.api.v1.admin import settings as admin_settings
 from app.api.v1.admin import tasks as admin_tasks
 from app.api.v1.auth import routes as auth_routes
 from app.api.v1.portal import documents as portal_documents
+from app.api.v1.portal import profile as portal_profile
 from app.api.v1.portal import tasks as portal_tasks
 from app.api.v1.public import chat as public_chat
 from app.api.v1.public import content as public_content
@@ -41,6 +43,7 @@ api_router.include_router(public_chat.router)
 
 api_router.include_router(portal_tasks.router)
 api_router.include_router(portal_documents.router)
+api_router.include_router(portal_profile.router)
 
 # --- Staff -------------------------------------------------------------------
 #
@@ -61,5 +64,6 @@ staff_router.include_router(admin_clients.router)
 staff_router.include_router(admin_tasks.router)
 staff_router.include_router(admin_settings.router)
 staff_router.include_router(admin_documents.router)
+staff_router.include_router(admin_notes.router)
 
 api_router.include_router(staff_router)
