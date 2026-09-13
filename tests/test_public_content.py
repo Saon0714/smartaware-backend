@@ -32,6 +32,35 @@ def test_home_service_teasers_come_from_the_taxonomy(api: TestClient) -> None:
     assert len(slugs) == 6
 
 
+def test_home_teasers_scoped_to_a_market_only_offer_what_it_provides(
+    api: TestClient,
+) -> None:
+    """The homepage links each teaser into the selected market.
+
+    CIS is a UK construction scheme and is not offered in India, so an unscoped
+    teaser list would put a card on the homepage whose link 404s.
+    """
+    everywhere = api.get("/api/v1/public/home?service_limit=24").json()
+    assert "cis-services" in {s["slug"] for s in everywhere["services"]}
+
+    india = api.get("/api/v1/public/home?service_limit=24&region=india").json()
+    india_slugs = {s["slug"] for s in india["services"]}
+    assert "cis-services" not in india_slugs
+
+    offered = api.get("/api/v1/public/regions/india/services").json()
+    assert india_slugs == {s["slug"] for s in offered["services"]}
+
+
+@pytest.mark.parametrize("region", ["atlantis", ""])
+def test_home_falls_back_to_every_service_for_an_unusable_market(
+    api: TestClient, region: str
+) -> None:
+    """The slug arrives from a cookie the visitor controls, and a market can be
+    unpublished at any time — neither should break the homepage."""
+    body = api.get(f"/api/v1/public/home?service_limit=24&region={region}").json()
+    assert "cis-services" in {s["slug"] for s in body["services"]}
+
+
 def test_about_assembles_every_section(api: TestClient) -> None:
     body = api.get("/api/v1/public/about").json()
 

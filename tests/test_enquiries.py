@@ -340,3 +340,30 @@ def test_rate_limit_is_scoped_per_caller(api: TestClient) -> None:
         headers={"X-Forwarded-For": "203.0.113.99"},
     )
     assert other.status_code == 201
+
+
+def test_country_options_come_from_the_served_markets(api: TestClient) -> None:
+    """The field rendered as an empty dropdown before: only service_required
+    was given options, so the form could not be completed."""
+    form = api.get("/api/v1/public/forms/enquiry").json()
+    field = next(f for f in form["fields"] if f["key"] == "country")
+
+    assert field["options"], "country must offer choices"
+    assert field["options"][:4] == [
+        "United Kingdom", "India", "United Arab Emirates", "Oman",
+    ]
+    assert field["options"][-1] == "Other"
+
+
+def test_unpublishing_a_market_removes_it_from_the_country_field(
+    api: TestClient, db: Session
+) -> None:
+    from app.models.service import Region
+
+    region = db.execute(select(Region).where(Region.slug == "oman")).scalar_one()
+    region.is_published = False
+    db.flush()
+
+    form = api.get("/api/v1/public/forms/enquiry").json()
+    field = next(f for f in form["fields"] if f["key"] == "country")
+    assert "Oman" not in field["options"]

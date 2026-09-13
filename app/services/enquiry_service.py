@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.enquiry import Enquiry
+from app.models.enums import FormFieldType
 from app.models.form_schema import FormDefinition, FormField
 from app.models.service import ServiceCategory
 
@@ -53,6 +54,24 @@ def active_fields(form: FormDefinition) -> list[FormField]:
     )
 
 
+def country_options(db: Session) -> list[str]:
+    """Choices for a country field.
+
+    Sourced from the markets SmartAWARE actually serves, plus an escape hatch —
+    the field rendered as an empty dropdown before this, because only
+    `service_required` was being given options, which made it impossible to
+    complete.
+    """
+    from app.models.service import Region
+
+    rows = db.execute(
+        select(Region.name)
+        .where(Region.is_published.is_(True))
+        .order_by(Region.sort_order)
+    ).scalars()
+    return [*rows, "Other"]
+
+
 def service_options(db: Session) -> list[str]:
     """Choices for the "Service Required" field.
 
@@ -73,6 +92,7 @@ def service_options(db: Session) -> list[str]:
 def describe_form(db: Session, form: FormDefinition) -> dict[str, Any]:
     """The definition as the frontend needs it, with dynamic options filled in."""
     options = service_options(db)
+    countries = country_options(db)
     fields = []
     for field in active_fields(form):
         data = {
@@ -87,9 +107,12 @@ def describe_form(db: Session, form: FormDefinition) -> dict[str, Any]:
             "validation": field.validation,
             "sort_order": field.sort_order,
         }
-        # A select with no stored options draws them from the service list.
+        # Selects with no stored options draw them from live data, so the form
+        # can never offer a service or a market that is not actually served.
         if field.key == "service_required" and not field.options:
             data["options"] = options
+        elif field.field_type is FormFieldType.COUNTRY and not field.options:
+            data["options"] = countries
         fields.append(data)
     return {
         "key": form.key,

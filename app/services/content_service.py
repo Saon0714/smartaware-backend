@@ -25,6 +25,7 @@ from app.models.content import (
     Testimonial,
 )
 from app.models.service import ServiceCategory
+from app.services import service_catalog
 
 
 def _published(model, db: Session, *order):
@@ -125,8 +126,27 @@ def legal_page(db: Session, slug: str) -> LegalPage | None:
     ).scalar_one_or_none()
 
 
-def service_teasers(db: Session, limit: int | None = None) -> list[ServiceCategory]:
-    """Published, non-archived service categories for the homepage."""
+def service_teasers(
+    db: Session, limit: int | None = None, region_slug: str | None = None
+) -> list[ServiceCategory] | list[dict]:
+    """Published, non-archived service categories for the homepage.
+
+    Scoped to a market when one is given, because the homepage links each teaser
+    into that market's service page — an unscoped list would offer a card for a
+    service that market does not provide, and the link would 404. The market's
+    own naming is applied at the same time, so a category renamed for a region
+    reads consistently from the homepage onwards.
+
+    An unknown or unpublished slug falls back to the unscoped list rather than
+    erroring: the slug reaches us from a cookie the visitor controls, and a
+    market can be unpublished at any time.
+    """
+    if region_slug:
+        region = service_catalog.get_region(db, region_slug)
+        if region is not None:
+            scoped = service_catalog.services_for_region(db, region)
+            return scoped[:limit] if limit is not None else scoped
+
     stmt = (
         select(ServiceCategory)
         .where(

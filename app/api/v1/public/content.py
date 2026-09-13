@@ -33,11 +33,15 @@ router = APIRouter(prefix="/public", tags=["public-content"])
 def home_page(
     db: DbSession,
     service_limit: Annotated[int, Query(ge=1, le=24)] = 6,
+    region: Annotated[
+        str | None,
+        Query(description="Market slug. Scopes the service teasers to what that market offers."),
+    ] = None,
 ) -> HomePageOut:
     return HomePageOut(
         hero=content.block_payload(db, "home_hero"),
         key_strengths=content.key_strengths(db),
-        services=content.service_teasers(db, limit=service_limit),
+        services=content.service_teasers(db, limit=service_limit, region_slug=region),
         achievements=content.achievements(db),
         testimonials=content.testimonials(db),
     )
