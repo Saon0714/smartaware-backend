@@ -232,3 +232,21 @@ def ai() -> Generator[StubAiClient, None, None]:
     rag_client.set_client(stub)
     yield stub
     rag_client.set_client(None)
+
+
+# --- Storage fixture -----------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _isolated_storage(tmp_path):
+    """Every test gets its own upload directory.
+
+    Without this, tests would share `uploads/` in the repository and leave real
+    files behind.
+    """
+    from app.services.storage import set_storage
+    from app.services.storage.local import LocalStorage
+
+    set_storage(LocalStorage(tmp_path / "storage"))
+    yield
+    set_storage(None)
