@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -42,6 +42,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # driven by the `mfa_required_roles` DB setting and is off by default.
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # Bumped to invalidate every outstanding token for this user at once:
+    # password change, or an Admin putting the account on Hold/Deactive.
+    # Tokens carry the version they were minted with and are rejected once
+    # it no longer matches, so revocation does not need a session table.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     client: Mapped[Client | None] = relationship(
         "Client", back_populates="user", foreign_keys="Client.user_id", uselist=False

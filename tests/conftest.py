@@ -91,3 +91,86 @@ def client() -> TestClient:
     from app.main import create_app
 
     return TestClient(create_app())
+
+
+# --- Auth fixtures -----------------------------------------------------------
+
+
+@pytest.fixture
+def api(db: Session) -> Generator[TestClient, None, None]:
+    """A TestClient whose requests share the test transaction.
+
+    Overriding get_db means requests see the fixtures a test created without
+    committing them, and everything rolls back afterwards.
+    """
+    from app.db.session import get_db
+    from app.main import create_app
+    from app.seeds.run import seed_all
+
+    seed_all(db)
+
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def make_user(db: Session):
+    """Factory for users, optionally with an attached client profile."""
+    from app.core.security import generate_client_ref, hash_password
+    from app.models.client import Client
+    from app.models.enums import ClientStatus, UserRole
+    from app.models.user import User
+
+    counter = {"n": 0}
+
+    def _make(
+        role: UserRole = UserRole.CLIENT,
+        *,
+        email: str | None = None,
+        password: str = "correct horse battery staple",
+        is_active: bool = True,
+        client_status: ClientStatus = ClientStatus.ACTIVE,
+        assigned_manager=None,
+        company_name: str | None = None,
+    ):
+        counter["n"] += 1
+        user = User(
+            email=email or f"{role.value}{counter['n']}@example.com",
+            hashed_password=hash_password(password),
+            role=role,
+            is_active=is_active,
+            full_name=f"Test {role.value.title()} {counter['n']}",
+        )
+        db.add(user)
+        db.flush()
+
+        client = None
+        if role is UserRole.CLIENT:
+            client = Client(
+                user_id=user.id,
+                client_ref=generate_client_ref(),
+                company_name=company_name or f"Client Co {counter['n']}",
+                status=client_status,
+                assigned_manager_id=assigned_manager.id if assigned_manager else None,
+            )
+            db.add(client)
+            db.flush()
+
+        return user, client
+
+    return _make
+
+
+@pytest.fixture
+def login(api: TestClient):
+    """Sign in and return an Authorization header."""
+
+    def _login(email: str, password: str = "correct horse battery staple") -> dict[str, str]:
+        response = api.post("/api/v1/auth/login", json={"email": email, "password": password})
+        assert response.status_code == 200, response.text
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    return _login

@@ -55,3 +55,72 @@ def generate_client_ref() -> str:
     up in URLs, emails or logs.
     """
     return f"SA-{secrets.token_hex(4).upper()}"
+
+
+# --- JWT ---------------------------------------------------------------------
+#
+# Access tokens are short-lived and held only in the frontend's memory. Refresh
+# tokens are long-lived but travel in an httpOnly cookie, so page JavaScript --
+# and therefore an XSS payload -- cannot read them. See BUILD_PLAN Q1.
+
+import uuid  # noqa: E402
+from datetime import UTC, datetime, timedelta  # noqa: E402
+from typing import Any, Literal  # noqa: E402
+
+import jwt  # noqa: E402
+
+from app.core.config import settings  # noqa: E402
+
+TokenType = Literal["access", "refresh"]
+
+
+class TokenError(Exception):
+    """Raised when a token is missing, malformed, expired or the wrong type."""
+
+
+def create_token(
+    subject: uuid.UUID,
+    token_type: TokenType,
+    token_version: int,
+    role: str | None = None,
+    expires_delta: timedelta | None = None,
+) -> str:
+    now = datetime.now(UTC)
+    if expires_delta is None:
+        expires_delta = (
+            timedelta(minutes=settings.ACCESS_TOKEN_TTL_MINUTES)
+            if token_type == "access"
+            else timedelta(days=settings.REFRESH_TOKEN_TTL_DAYS)
+        )
+    payload: dict[str, Any] = {
+        "sub": str(subject),
+        "typ": token_type,
+        "ver": token_version,
+        "iat": int(now.timestamp()),
+        "exp": int((now + expires_delta).timestamp()),
+        "jti": secrets.token_urlsafe(16),
+    }
+    if role is not None:
+        payload["role"] = role
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_token(token: str, expected_type: TokenType) -> dict[str, Any]:
+    """Decode and validate a token, or raise TokenError.
+
+    The type is checked explicitly: a refresh token must never be accepted
+    where an access token is expected, or its much longer lifetime would
+    silently become the session length.
+    """
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError as exc:
+        raise TokenError("Token has expired") from exc
+    except jwt.InvalidTokenError as exc:
+        raise TokenError("Token is invalid") from exc
+
+    if payload.get("typ") != expected_type:
+        raise TokenError(f"Expected a {expected_type} token")
+    if not payload.get("sub"):
+        raise TokenError("Token has no subject")
+    return payload
