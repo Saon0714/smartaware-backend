@@ -19,11 +19,10 @@ or deleted from the UI.
 
 import uuid
 from collections.abc import Callable
-from copy import deepcopy
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -71,28 +70,13 @@ from app.schemas.content import (
     TestimonialOut,
     TestimonialWrite,
 )
+from app.schemas.partial import make_partial
 
 #: Every route in this module requires it, so managers are included only when
 #: SmartAWARE enables `manager_can_manage_content` (Section 13 item 6).
 _content_editor = require_permission(Permission.CONTENT_MANAGE)
 
 router = APIRouter(prefix="/admin/content", tags=["admin-content"])
-
-
-def make_partial(base: type[BaseModel], name: str) -> type[BaseModel]:
-    """A copy of `base` with every field optional, for PATCH bodies.
-
-    Reusing the create schema for PATCH would make a partial edit fail
-    validation on the fields it deliberately left out. Deriving the partial
-    keeps one source of truth — field names, types and constraints such as
-    max_length all follow the original automatically.
-    """
-    fields: dict[str, Any] = {}
-    for field_name, field_info in base.model_fields.items():
-        optional_info = deepcopy(field_info)
-        optional_info.default = None
-        fields[field_name] = (field_info.annotation | None, optional_info)
-    return create_model(name, **fields)  # type: ignore[call-overload]
 
 
 def _get_or_404(db: Session, model: Any, row_id: uuid.UUID) -> Any:
