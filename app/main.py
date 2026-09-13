@@ -16,7 +16,11 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     them `tag_name` yields `healthHealth` -> clean names in the frontend client.
     Changing this later churns every generated symbol, so it is set from day one.
     """
-    tag = route.tags[0] if route.tags else "default"
+    # The LAST tag, not the first: when a router is nested inside another,
+    # FastAPI prepends the parent's tags, so tags[0] would be the shared parent
+    # ("admin-content") for every child and every operation ID would collide.
+    # The last entry is always the most specific router's own tag.
+    tag = route.tags[-1] if route.tags else "default"
     return f"{tag}_{route.name}"
 
 
