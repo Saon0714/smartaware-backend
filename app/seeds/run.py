@@ -22,6 +22,7 @@ from app.models.content import (
     LegalPage,
     Milestone,
 )
+from app.models.faq import FaqEntry
 from app.models.form_schema import FormDefinition, FormField
 from app.models.onboarding import WizardQuestion, WizardStep
 from app.models.service import (
@@ -41,6 +42,7 @@ from app.seeds.content_seed import (
     LEGAL_PAGES,
     MILESTONES,
 )
+from app.seeds.faq_seed import FAQ_ENTRIES
 from app.seeds.forms_seed import FORM_DEFINITIONS
 from app.seeds.services_seed import (
     REGION_NAME_OVERRIDES,
@@ -202,6 +204,16 @@ def seed_content(db: Session) -> dict[str, int]:
     return counts
 
 
+def seed_faq(db: Session) -> int:
+    created = 0
+    for order, row in enumerate(FAQ_ENTRIES, start=1):
+        if _exists(db, FaqEntry, question=row["question"]):
+            continue
+        db.add(FaqEntry(**row, sort_order=order))
+        created += 1
+    return created
+
+
 def seed_forms(db: Session) -> dict[str, int]:
     counts = {"forms": 0, "fields": 0}
     for spec in FORM_DEFINITIONS:
@@ -254,6 +266,7 @@ def seed_all(db: Session) -> dict[str, object]:
         "settings": seed_settings(db),
         "services": seed_services(db),
         "content": seed_content(db),
+        "faq": seed_faq(db),
         "forms": seed_forms(db),
         "wizard": seed_wizard(db),
     }

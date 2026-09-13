@@ -56,6 +56,8 @@ worker and beat together.
 | `make migrate` | Apply Alembic migrations |
 | `make revision m="..."` | Create a migration |
 | `make worker` / `make beat` | Celery worker / scheduler |
+| `uv run python scripts/run_job.py reindex-faq` | Run the FAQ index now |
+| `uv run python scripts/run_job.py purge-chat-logs` | Run the retention purge now |
 
 ## Architecture notes
 
@@ -80,6 +82,35 @@ from the Admin Portal. None of it is hardcoded.
 invoice data and redirect. There is deliberately no Wise API credential and no
 code path that calls the Wise API — programmatic payment-link creation is
 unsupported by Wise and must not be built.
+
+## Smart AI and background jobs
+
+The chatbot needs `OPENAI_API_KEY` in `.env`. Without it the chat endpoint
+returns 503 with a plain message rather than a fabricated answer, and the
+re-index job exits with a clear error instead of a traceback.
+
+Two jobs run nightly under Celery beat:
+
+| Job | Schedule | Purpose |
+|---|---|---|
+| `faq.reindex` | 02:30 UTC | Incremental FAQ embedding (spec 4.4) |
+| `chat.purge_logs` | 03:30 UTC | Delete transcripts past the retention window (spec 4.5) |
+
+The re-index is strictly incremental: it embeds only entries whose `updated_at`
+is newer than their `indexed_at`, removes embeddings for soft-deleted or
+unpublished entries, and leaves everything else untouched. It runs every night
+even when nothing changed — spec 4.4 requires a no-op run rather than a skipped
+one, so a late edit cannot sit unindexed.
+
+Both jobs are plain functions in `app/jobs/`, with the Celery tasks as thin
+wrappers, so they can be run by hand and the scheduler stays replaceable.
+
+After seeding or editing FAQ content, run the index once rather than waiting
+for the nightly job:
+
+```bash
+uv run python scripts/run_job.py reindex-faq
+```
 
 ## Keeping the frontend in sync
 

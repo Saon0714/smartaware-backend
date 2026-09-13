@@ -321,6 +321,11 @@ def test_repeated_submissions_are_rate_limited(api: TestClient) -> None:
 def test_rate_limit_is_scoped_per_caller(api: TestClient) -> None:
     """The limit follows the forwarded client address, not the load balancer,
     so one noisy visitor cannot lock everyone else out."""
+    # Counters live in Redis with an hour-long window, so they outlive the test
+    # process and must be cleared before use, not only after.
+    rate_limit.reset("enquiry:203.0.113.10")
+    rate_limit.reset("enquiry:203.0.113.99")
+
     for _ in range(5):
         api.post(
             "/api/v1/public/enquiries",

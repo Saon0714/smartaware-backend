@@ -174,3 +174,61 @@ def login(api: TestClient):
         return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
     return _login
+
+
+# --- Smart AI fixtures ---------------------------------------------------------
+
+
+class StubAiClient:
+    """A deterministic stand-in for OpenAI.
+
+    Embeddings are built from token hashes rather than random values, so texts
+    sharing words genuinely land near each other and cosine similarity behaves
+    like the real thing. That lets the escalation threshold be tested for real
+    instead of against a hardcoded score.
+    """
+
+    def __init__(self) -> None:
+        self.embed_calls: list[list[str]] = []
+        self.answer_calls: list[tuple[str, str]] = []
+        self.fail_embed = False
+        self.fail_answer = False
+
+    @staticmethod
+    def _vector(text: str) -> list[float]:
+        import math
+        import re
+        import zlib
+
+        dims = 1536
+        vector = [0.0] * dims
+        tokens = re.findall(r"[a-z']+", text.lower())
+        for token in tokens:
+            # zlib.crc32, not the builtin hash(): string hashing is randomised
+            # per process, which would make these tests irreproducible.
+            vector[zlib.crc32(token.encode()) % dims] += 1.0
+        norm = math.sqrt(sum(v * v for v in vector)) or 1.0
+        return [v / norm for v in vector]
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        if self.fail_embed:
+            raise RuntimeError("embedding failed")
+        self.embed_calls.append(list(texts))
+        return [self._vector(text) for text in texts]
+
+    def answer(self, question: str, context: str, history: list[dict]) -> str:
+        if self.fail_answer:
+            raise RuntimeError("completion failed")
+        self.answer_calls.append((question, context))
+        return f"Answer grounded in FAQ. [context chars: {len(context)}]"
+
+
+@pytest.fixture
+def ai() -> Generator[StubAiClient, None, None]:
+    """Install the stub for the duration of a test."""
+    from app.services.rag import client as rag_client
+
+    stub = StubAiClient()
+    rag_client.set_client(stub)
+    yield stub
+    rag_client.set_client(None)
