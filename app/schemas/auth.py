@@ -68,10 +68,24 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = PasswordField
 
 
+class ServiceRef(BaseModel):
+    """A service category, named just enough to display."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    slug: str
+    name: str
+
+
 class InviteCreateRequest(BaseModel):
     email: EmailStr
     role: UserRole = UserRole.CLIENT
     company_name: str | None = Field(default=None, max_length=255)
+    #: The services this client is being signed up for. Copied onto their
+    #: record when they redeem the invitation; they cannot change it, and
+    #: nothing they submit at sign-up reaches it.
+    service_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class InviteOut(BaseModel):
@@ -86,6 +100,7 @@ class InviteOut(BaseModel):
     revoked_at: datetime | None
     created_at: datetime
     prefill_company_name: str | None
+    services: list[ServiceRef] = Field(default_factory=list)
 
 
 class InviteCreatedOut(BaseModel):
@@ -105,6 +120,9 @@ class InviteCheckOut(BaseModel):
     email: EmailStr
     company_name: str | None
     expires_at: datetime
+    #: Shown so the invitee can see what the account is being set up for.
+    #: Read-only — there is no field to change it, here or afterwards.
+    services: list[ServiceRef] = Field(default_factory=list)
 
 
 class AcceptInviteRequest(BaseModel):

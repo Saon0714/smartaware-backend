@@ -209,3 +209,168 @@ def test_listing_reports_derived_expiry_status(api: TestClient, db: Session, adm
     rows = api.get("/api/v1/admin/invites", headers=admin_headers).json()
     match = next(r for r in rows if r["email"] == "new@example.com")
     assert match["status"] == InviteStatus.EXPIRED.value
+
+
+# --- Preselected services (the client has no say in what they are engaged for) -----
+
+
+def _service_ids(db: Session, *names: str) -> list[str]:
+    from app.models.service import ServiceCategory
+
+    rows = db.execute(
+        select(ServiceCategory).where(ServiceCategory.name.in_(names))
+    ).scalars()
+    by_name = {c.name: str(c.id) for c in rows}
+    return [by_name[name] for name in names]
+
+
+def test_services_chosen_at_invitation_land_on_the_new_client(
+    api: TestClient, db: Session, admin_headers
+) -> None:
+    wanted = _service_ids(db, "Payroll", "VAT Services")
+    body = _invite(
+        api, admin_headers, "new@example.com", company_name="Acme Ltd", service_ids=wanted
+    )
+    assert sorted(s["name"] for s in body["invite"]["services"]) == ["Payroll", "VAT Services"]
+
+    token = _token_from(body["invite_url"])
+    api.post(f"/api/v1/auth/invite/{token}/accept", json={"password": NEW_PASSWORD})
+
+    user = db.execute(select(User).where(User.email == "new@example.com")).scalar_one()
+    assert sorted(s.name for s in user.client.services) == ["Payroll", "VAT Services"]
+
+
+def test_the_invitee_is_shown_the_services_before_signing_up(
+    api: TestClient, db: Session, admin_headers
+) -> None:
+    wanted = _service_ids(db, "Bookkeeping")
+    body = _invite(api, admin_headers, "new@example.com", service_ids=wanted)
+    token = _token_from(body["invite_url"])
+
+    check = api.get(f"/api/v1/auth/invite/{token}").json()
+    assert [s["name"] for s in check["services"]] == ["Bookkeeping"]
+
+
+def test_the_person_signing_up_cannot_choose_their_own_services(
+    api: TestClient, db: Session, admin_headers
+) -> None:
+    """The accept request has no services field, and adding one changes nothing.
+
+    This is the whole point of holding the choice on the invitation: it is
+    SmartAWARE's commercial decision, taken before the account exists.
+    """
+    wanted = _service_ids(db, "Bookkeeping")
+    everything = _service_ids(db, "Payroll", "VAT Services", "Personal Tax")
+    body = _invite(api, admin_headers, "new@example.com", service_ids=wanted)
+    token = _token_from(body["invite_url"])
+
+    response = api.post(
+        f"/api/v1/auth/invite/{token}/accept",
+        json={"password": NEW_PASSWORD, "service_ids": everything, "services": everything},
+    )
+    assert response.status_code == 201
+
+    user = db.execute(select(User).where(User.email == "new@example.com")).scalar_one()
+    assert [s.name for s in user.client.services] == ["Bookkeeping"]
+
+
+def test_a_client_cannot_change_their_services_through_the_profile_form(
+    api: TestClient, db: Session, make_user, login
+) -> None:
+    """The profile form writes to an allowlist of columns; anything else lands
+    in `extra`. A field called `services` therefore cannot reach the
+    relationship, whatever an editor names it in the Admin Portal."""
+    from app.models.service import ServiceCategory
+
+    user, client = make_user(UserRole.CLIENT, email="them@example.com")
+    client.services = list(
+        db.execute(select(ServiceCategory).where(ServiceCategory.name == "Payroll")).scalars()
+    )
+    db.flush()
+
+    headers = login("them@example.com")
+    response = api.patch(
+        "/api/v1/portal/profile",
+        json={"values": {"services": ["Personal Tax"], "service_ids": ["x"]}},
+        headers=headers,
+    )
+    # Accepted, because the form silently ignores keys it does not define —
+    # which is exactly why the allowlist matters. Nothing reached the services.
+    assert response.status_code == 200
+
+    db.refresh(client)
+    assert [s.name for s in client.services] == ["Payroll"]
+
+
+def test_resending_keeps_the_same_services(
+    api: TestClient, db: Session, admin_headers
+) -> None:
+    """A fresh link has to stand for the same offer as the one it replaces."""
+    wanted = _service_ids(db, "Payroll", "CIS Services")
+    body = _invite(api, admin_headers, "new@example.com", service_ids=wanted)
+
+    resent = api.post(
+        f"/api/v1/admin/invites/{body['invite']['id']}/resend", headers=admin_headers
+    ).json()
+    assert sorted(s["name"] for s in resent["invite"]["services"]) == [
+        "CIS Services",
+        "Payroll",
+    ]
+
+    token = _token_from(resent["invite_url"])
+    api.post(f"/api/v1/auth/invite/{token}/accept", json={"password": NEW_PASSWORD})
+    user = db.execute(select(User).where(User.email == "new@example.com")).scalar_one()
+    assert sorted(s.name for s in user.client.services) == ["CIS Services", "Payroll"]
+
+
+def test_an_unknown_service_is_refused(api: TestClient, admin_headers) -> None:
+    response = api.post(
+        "/api/v1/admin/invites",
+        json={
+            "email": "new@example.com",
+            "service_ids": ["00000000-0000-0000-0000-000000000001"],
+        },
+        headers=admin_headers,
+    )
+    assert response.status_code == 400
+    assert "Unknown service" in response.json()["detail"]
+
+
+def test_an_archived_service_cannot_be_sold_to_a_new_client(
+    api: TestClient, db: Session, admin_headers
+) -> None:
+    """Unlike editing an existing client, who may still be engaged for
+    something SmartAWARE has since withdrawn."""
+    from app.models.service import ServiceCategory
+
+    category = db.execute(
+        select(ServiceCategory).where(ServiceCategory.name == "Payroll")
+    ).scalar_one()
+    category.is_archived = True
+    db.flush()
+
+    response = api.post(
+        "/api/v1/admin/invites",
+        json={"email": "new@example.com", "service_ids": [str(category.id)]},
+        headers=admin_headers,
+    )
+    assert response.status_code == 400
+    assert "no longer offered" in response.json()["detail"]
+
+
+def test_staff_invitations_cannot_carry_services(
+    api: TestClient, db: Session, admin_headers
+) -> None:
+    """Only a client has services. Storing them on a manager invite would record
+    a choice that redemption silently discards."""
+    response = api.post(
+        "/api/v1/admin/invites",
+        json={
+            "email": "mgr@example.com",
+            "role": "manager",
+            "service_ids": _service_ids(db, "Payroll"),
+        },
+        headers=admin_headers,
+    )
+    assert response.status_code == 400
+    assert "client invitations" in response.json()["detail"]

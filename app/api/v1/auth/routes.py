@@ -18,6 +18,7 @@ from app.schemas.auth import (
     LoginRequest,
     MeOut,
     MessageOut,
+    ServiceRef,
     SessionOut,
     UserOut,
 )
@@ -163,6 +164,11 @@ def check_invite(token: str, db: DbSession) -> InviteCheckOut:
         email=invite.email,
         company_name=invite.prefill_company_name,
         expires_at=invite.expires_at,
+        # Shown so the invitee knows what the account is being set up for. There
+        # is no corresponding field on the accept request — what a client is
+        # engaged for is SmartAWARE's decision, taken when the invitation was
+        # issued.
+        services=[ServiceRef.model_validate(s) for s in invite.services],
     )
 
 

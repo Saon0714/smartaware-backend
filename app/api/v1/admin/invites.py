@@ -45,6 +45,7 @@ def create_invite(
             invited_by=admin,
             role=payload.role,
             company_name=payload.company_name,
+            service_ids=payload.service_ids,
         )
     except invite_service.InviteError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -104,6 +105,8 @@ def resend_invite(invite_id: uuid.UUID, admin: RequireAdmin, db: DbSession) -> I
             invited_by=admin,
             role=existing.role,
             company_name=existing.prefill_company_name,
+            # The new link must stand for the same offer as the old one.
+            service_ids=[service.id for service in existing.services],
         )
     except invite_service.InviteError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

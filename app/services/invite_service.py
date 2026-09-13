@@ -26,6 +26,7 @@ from app.core.security import (
 from app.core.settings_service import SettingKey, get_setting
 from app.models.client import Client
 from app.models.enums import InviteStatus, UserRole
+from app.models.service import ServiceCategory
 from app.models.user import Invite, User
 from app.services.notification import NotificationEvent, notify
 
@@ -61,6 +62,39 @@ def build_invite_url(token: str) -> str:
     return f"{settings.FRONTEND_BASE_URL.rstrip('/')}/invite/{token}"
 
 
+def resolve_services(
+    db: Session, service_ids: list[uuid.UUID] | None
+) -> list[ServiceCategory]:
+    """Turn caller-supplied category IDs into rows, rejecting anything unknown.
+
+    Duplicates collapse — asking for the same service twice is a request for
+    that service, and the join table could not store it anyway.
+
+    Archived categories are refused here, unlike when editing an existing
+    client. Somebody being signed up now cannot be sold something SmartAWARE has
+    withdrawn; an existing client may perfectly well still be engaged for one.
+    """
+    wanted = list(dict.fromkeys(service_ids or []))
+    if not wanted:
+        return []
+
+    found = {
+        category.id: category
+        for category in db.execute(
+            select(ServiceCategory).where(ServiceCategory.id.in_(wanted))
+        ).scalars()
+    }
+    missing = [str(i) for i in wanted if i not in found]
+    if missing:
+        raise InviteError(f"Unknown service: {', '.join(missing)}.")
+
+    archived = [found[i].name for i in wanted if found[i].is_archived]
+    if archived:
+        raise InviteError(f"This service is no longer offered: {', '.join(archived)}.")
+
+    return [found[i] for i in wanted]
+
+
 def create_invite(
     db: Session,
     *,
@@ -68,6 +102,7 @@ def create_invite(
     invited_by: User,
     role: UserRole = UserRole.CLIENT,
     company_name: str | None = None,
+    service_ids: list[uuid.UUID] | None = None,
 ) -> tuple[Invite, str]:
     """Issue an invite. Returns the row and the raw token (shown once)."""
     email = email.strip().lower()
@@ -88,6 +123,12 @@ def create_invite(
         existing.status = InviteStatus.REVOKED
         existing.revoked_at = _now()
 
+    services = resolve_services(db, service_ids)
+    if services and role is not UserRole.CLIENT:
+        # Only a client has services. Attaching them to a staff invite would
+        # store a choice that redemption then silently discards.
+        raise InviteError("Only client invitations can have services.")
+
     expiry_days = int(get_setting(db, SettingKey.INVITE_EXPIRY_DAYS, 3))
     raw_token = generate_token()
 
@@ -99,6 +140,7 @@ def create_invite(
         invited_by_id=invited_by.id,
         expires_at=_now() + timedelta(days=expiry_days),
         prefill_company_name=company_name,
+        services=services,
     )
     db.add(invite)
     db.flush()
@@ -166,6 +208,10 @@ def accept_invite(
                 client_ref=generate_client_ref(),
                 company_name=invite.prefill_company_name,
                 contact_email=user.email,
+                # Taken from the invitation, not from the request. The person
+                # signing up has no say in what they are engaged for, and no
+                # field they submit reaches this — which is the point.
+                services=list(invite.services),
             )
         )
 

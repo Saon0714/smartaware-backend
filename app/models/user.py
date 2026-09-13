@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -16,6 +16,32 @@ from app.models.enums import InviteStatus, UserRole
 
 if TYPE_CHECKING:
     from app.models.client import Client
+    from app.models.service import ServiceCategory
+
+
+#: The services an invited client is being signed up for.
+#:
+#: Chosen by the Admin when the invitation is issued and copied onto the client
+#: record when it is redeemed. Kept on the invite rather than resolved at
+#: redemption from anything the invitee supplies: what a client is engaged for
+#: is a commercial decision, and nothing the person accepting the invitation
+#: sends may influence it.
+invite_services = Table(
+    "invite_services",
+    Base.metadata,
+    Column(
+        "invite_id",
+        PgUUID(as_uuid=True),
+        ForeignKey("invites.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "category_id",
+        PgUUID(as_uuid=True),
+        ForeignKey("service_categories.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
 
 
 def _enum(enum_cls: type, name: str) -> SAEnum:
@@ -91,3 +117,8 @@ class Invite(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Pre-filled onto the Client record on acceptance, so Admin can invite a
     # named company rather than a bare email address.
     prefill_company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    #: Copied onto the Client on acceptance. See `invite_services`.
+    services: Mapped[list[ServiceCategory]] = relationship(
+        "ServiceCategory", secondary=invite_services, lazy="selectin"
+    )

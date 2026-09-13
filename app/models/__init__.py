@@ -39,7 +39,7 @@ from app.models.service import (
 )
 from app.models.setting import Setting
 from app.models.task import Task
-from app.models.user import Invite, User
+from app.models.user import Invite, User, invite_services
 
 __all__ = [
     "Base",
@@ -49,6 +49,7 @@ __all__ = [
     "ChatSession",
     "Client",
     "client_services",
+    "invite_services",
     "ContactDetail",
     "ContentBlock",
     "ContentListItem",
