@@ -27,7 +27,7 @@ from app.core.settings_service import SettingKey, get_setting
 from app.models.client import Client
 from app.models.enums import InviteStatus, UserRole
 from app.models.user import Invite, User
-from app.services.email import send_email
+from app.services.notification import NotificationEvent, notify
 
 
 class InviteError(Exception):
@@ -103,15 +103,11 @@ def create_invite(
     db.add(invite)
     db.flush()
 
-    send_email(
+    notify(
+        db,
+        NotificationEvent.INVITE_SENT,
+        {"invite_url": build_invite_url(raw_token), "expiry_days": expiry_days},
         to=email,
-        subject="You have been invited to the SmartAWARE Client Portal",
-        body=(
-            "You have been invited to create a SmartAWARE Client Portal account.\n\n"
-            f"Set up your account: {build_invite_url(raw_token)}\n\n"
-            f"This link can be used once and expires in {expiry_days} days.\n\n"
-            "If you were not expecting this invitation, you can ignore this email."
-        ),
     )
     return invite, raw_token
 
