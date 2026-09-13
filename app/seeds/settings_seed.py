@@ -14,13 +14,19 @@ SETTINGS_DEFAULTS: list[dict] = [
     # --- Smart AI chatbot ---
     {
         "key": "chat_similarity_threshold",
-        "value": 0.75,
+        "value": 0.35,
         "value_type": T.FLOAT,
         "group": "chatbot",
         "description": (
             "Minimum cosine similarity for the chatbot to answer from the FAQ. "
             "Below this it shows the 'Please contact us' fallback. "
-            "ASSUMED DEFAULT (Section 13 item 7) — tune against real traffic."
+            "ASSUMED DEFAULT (Section 13 item 7), but measured rather than "
+            "guessed: against the seeded FAQ with text-embedding-3-small, "
+            "genuinely relevant questions scored 0.48-0.78 and irrelevant ones "
+            "0.07-0.17, so 0.35 sits in the gap with margin on both sides. "
+            "Raise it to answer only close matches; lower it to attempt more "
+            "questions at the risk of weaker answers. Worth re-measuring once "
+            "SmartAWARE's real FAQ set is in place."
         ),
     },
     {

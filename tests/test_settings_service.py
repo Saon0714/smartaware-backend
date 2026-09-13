@@ -15,7 +15,9 @@ def _clear_cache() -> None:
 
 
 def test_section_13_defaults_are_seeded(seeded_db: Session) -> None:
-    assert get_setting(seeded_db, SettingKey.CHAT_SIMILARITY_THRESHOLD) == 0.75
+    # Measured against the seeded FAQ rather than guessed — see the setting's
+    # description for the observed relevant/irrelevant separation.
+    assert get_setting(seeded_db, SettingKey.CHAT_SIMILARITY_THRESHOLD) == 0.35
     assert get_setting(seeded_db, SettingKey.CHAT_RETENTION_DAYS) == 30
     assert get_setting(seeded_db, SettingKey.INVITE_EXPIRY_DAYS) == 3
     assert get_setting(seeded_db, SettingKey.ALLOW_MULTIPLE_ADMINS) is False
