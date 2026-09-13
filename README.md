@@ -19,9 +19,19 @@ OpenAPI schema this service publishes at `/openapi.json`.
 ```bash
 cp .env.example .env          # then edit
 uv sync                       # install dependencies from uv.lock
-make db-create                # create the database + enable pgvector
+make db-create                # role, database and pgvector (needs superuser, once)
+make migrate                  # build the schema
+make seed                     # reference data - idempotent, safe to re-run
+make create-admin email=you@example.com
 make dev                      # http://localhost:8000
 ```
+
+`make db-create` installs pgvector into `template1` rather than only into
+the application database. Creating an extension requires superuser, and
+doing it once in `template1` means every database created afterwards —
+including the throwaway test database — already has it, so migrations run
+as the unprivileged application role. It also grants `CREATEDB` to that
+role for the test suite; **do not grant `CREATEDB` in production**.
 
 macOS via Homebrew:
 

@@ -41,6 +41,9 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Tests are function-based. Without this, pytest tries to collect ORM
+# models whose names begin with "Test" (e.g. Testimonial).
+python_classes = []
 
 [tool.mypy]
 python_version = "3.12"

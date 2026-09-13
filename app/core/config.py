@@ -10,10 +10,10 @@ live here: they live in the `settings` DB table and are read through
 """
 
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -32,6 +32,8 @@ class Settings(BaseSettings):
 
     # --- Database ---
     DATABASE_URL: str = "postgresql+psycopg://smartaware:smartaware@localhost:5432/smartaware"
+    # Echo every statement. Off even in local dev: it buries script output.
+    SQL_ECHO: bool = False
 
     # --- Redis / Celery ---
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -42,7 +44,11 @@ class Settings(BaseSettings):
     # Explicit allowlist. The frontend is a separate origin, so this is a real
     # security boundary — a wildcard is never acceptable here, and credentialed
     # requests (our auth cookie) would be rejected by browsers anyway.
-    CORS_ALLOWED_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    # NoDecode stops pydantic-settings JSON-decoding this before the
+    # validator runs, so a plain comma-separated env var works.
+    CORS_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:3000"]
+    )
 
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
