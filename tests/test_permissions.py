@@ -5,6 +5,8 @@ insufficient. These tests therefore assert on the matrix itself and, where a
 rule is easy to get wrong, on the HTTP response.
 """
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -126,3 +128,38 @@ def test_admin_only_endpoint_allows_admin(api: TestClient, make_user, login) -> 
     make_user(UserRole.ADMIN, email="admin@example.com")
     headers = login("admin@example.com")
     assert api.get("/api/v1/admin/invites", headers=headers).status_code == 200
+
+
+# --- The /admin namespace is staff-only ------------------------------------------
+
+
+def test_a_client_is_refused_everywhere_under_admin(api: TestClient, make_user, login) -> None:
+    """Several permissions are shared between clients and staff — a client may
+    view their own tasks, documents, invoices and notes. A permission check
+    alone would therefore let them call the staff endpoint and receive the
+    staff serialisation, which carries internal fields the portal withholds.
+
+    The surface is read from the OpenAPI schema rather than a hand-written
+    list, so an endpoint added later is covered without anyone remembering to
+    extend this test. (app.routes is not usable here: this FastAPI version
+    keeps included routers lazily rather than flattening them.)
+    """
+    make_user(UserRole.CLIENT, email="client@example.com")
+    headers = login("client@example.com")
+
+    paths = api.app.openapi()["paths"]
+    checked = 0
+    for path, operations in paths.items():
+        if "/admin/" not in path:
+            continue
+        # Any path parameter will do; authorisation is refused before the value
+        # is looked at.
+        concrete = re.sub(r"\{[^}]+\}", "00000000-0000-0000-0000-000000000000", path)
+        for method in operations:
+            response = api.request(method.upper(), concrete, json={}, headers=headers)
+            assert response.status_code == 403, (
+                f"{method.upper()} {concrete} returned {response.status_code}, expected 403"
+            )
+            checked += 1
+
+    assert checked > 30, f"expected to cover the admin surface, only saw {checked}"
