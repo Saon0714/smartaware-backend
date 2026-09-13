@@ -126,6 +126,167 @@ def test_clients_created_at_the_same_instant_have_a_defined_order(
     assert same_instant == sorted(same_instant)
 
 
+# --- Tagging a manager to clients (Section 6.2) ------------------------------------
+
+
+def test_admin_tags_a_manager_to_several_clients_at_once(
+    api: TestClient, make_user, admin_headers, login
+) -> None:
+    manager, _ = make_user(UserRole.MANAGER, email="mgr@example.com")
+    _u1, first = make_user(UserRole.CLIENT, company_name="One Ltd")
+    _u2, second = make_user(UserRole.CLIENT, company_name="Two Ltd")
+    make_user(UserRole.CLIENT, company_name="Three Ltd")
+
+    response = api.put(
+        f"/api/v1/admin/staff/{manager.id}/clients",
+        json={"client_ids": [str(first.id), str(second.id)], "note": "New portfolio."},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    assert sorted(r["company_name"] for r in response.json()) == ["One Ltd", "Two Ltd"]
+
+    # And the manager now sees exactly those, and nothing else.
+    theirs = api.get("/api/v1/admin/clients", headers=login("mgr@example.com")).json()
+    assert sorted(r["company_name"] for r in theirs) == ["One Ltd", "Two Ltd"]
+
+
+def test_the_set_replaces_rather_than_adds(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    manager, _ = make_user(UserRole.MANAGER, email="mgr@example.com")
+    _u1, first = make_user(UserRole.CLIENT, company_name="One Ltd")
+    _u2, second = make_user(UserRole.CLIENT, company_name="Two Ltd")
+
+    def put(ids: list[str]) -> list[str]:
+        body = api.put(
+            f"/api/v1/admin/staff/{manager.id}/clients",
+            json={"client_ids": ids},
+            headers=admin_headers,
+        ).json()
+        return sorted(r["company_name"] for r in body)
+
+    assert put([str(first.id), str(second.id)]) == ["One Ltd", "Two Ltd"]
+    assert put([str(second.id)]) == ["Two Ltd"]
+    assert put([]) == []
+
+
+def test_taking_a_client_from_another_manager_is_recorded(
+    api: TestClient, make_user, admin_headers, db: Session
+) -> None:
+    losing, _ = make_user(UserRole.MANAGER, email="losing@example.com")
+    gaining, _ = make_user(UserRole.MANAGER, email="gaining@example.com")
+    _user, client = make_user(
+        UserRole.CLIENT, company_name="Moved Ltd", assigned_manager=losing
+    )
+
+    api.put(
+        f"/api/v1/admin/staff/{gaining.id}/clients",
+        json={"client_ids": [str(client.id)], "note": "Rebalancing."},
+        headers=admin_headers,
+    )
+
+    entries = api.get(
+        f"/api/v1/admin/clients/{client.id}/audit", headers=admin_headers
+    ).json()
+    move = next(e for e in entries if e["action"] == "client.manager_assigned")
+    assert move["old_value"]["manager_email"] == "losing@example.com"
+    assert move["new_value"]["manager_email"] == "gaining@example.com"
+    assert move["reason"] == "Rebalancing."
+
+
+def test_resending_an_unchanged_set_records_nothing(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    """Only the differences are written. Saving a screen twice should not fill
+    the account's history with identical entries."""
+    manager, _ = make_user(UserRole.MANAGER, email="mgr@example.com")
+    _user, client = make_user(UserRole.CLIENT, company_name="One Ltd")
+    payload = {"client_ids": [str(client.id)]}
+
+    api.put(f"/api/v1/admin/staff/{manager.id}/clients", json=payload, headers=admin_headers)
+    first = api.get(f"/api/v1/admin/clients/{client.id}/audit", headers=admin_headers).json()
+
+    api.put(f"/api/v1/admin/staff/{manager.id}/clients", json=payload, headers=admin_headers)
+    second = api.get(f"/api/v1/admin/clients/{client.id}/audit", headers=admin_headers).json()
+
+    assert len(second) == len(first) == 1
+
+
+def test_an_unknown_client_changes_nothing(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    manager, _ = make_user(UserRole.MANAGER, email="mgr@example.com")
+    _user, client = make_user(UserRole.CLIENT, company_name="One Ltd")
+    api.put(
+        f"/api/v1/admin/staff/{manager.id}/clients",
+        json={"client_ids": [str(client.id)]},
+        headers=admin_headers,
+    )
+
+    response = api.put(
+        f"/api/v1/admin/staff/{manager.id}/clients",
+        json={"client_ids": ["00000000-0000-0000-0000-000000000001"]},
+        headers=admin_headers,
+    )
+    assert response.status_code == 422
+    assert "Unknown client" in response.json()["detail"]
+
+    still = api.get(f"/api/v1/admin/staff/{manager.id}/clients", headers=admin_headers).json()
+    assert [r["company_name"] for r in still] == ["One Ltd"]
+
+
+def test_a_manager_cannot_set_their_own_portfolio(
+    api: TestClient, make_user, login
+) -> None:
+    """Section 6.1 gives Managers no say in their own allocation."""
+    manager, _ = make_user(UserRole.MANAGER, email="mgr@example.com")
+    _user, client = make_user(UserRole.CLIENT, company_name="Wanted Ltd")
+
+    response = api.put(
+        f"/api/v1/admin/staff/{manager.id}/clients",
+        json={"client_ids": [str(client.id)]},
+        headers=login("mgr@example.com"),
+    )
+    assert response.status_code == 403
+
+
+def test_a_manager_reading_a_colleagues_list_stays_inside_their_own_scope(
+    api: TestClient, make_user, login
+) -> None:
+    mine, _ = make_user(UserRole.MANAGER, email="mine@example.com")
+    theirs, _ = make_user(UserRole.MANAGER, email="theirs@example.com")
+    make_user(UserRole.CLIENT, company_name="Not Mine Ltd", assigned_manager=theirs)
+    make_user(UserRole.CLIENT, company_name="Mine Ltd", assigned_manager=mine)
+
+    body = api.get(
+        f"/api/v1/admin/staff/{theirs.id}/clients", headers=login("mine@example.com")
+    ).json()
+    assert body == []
+
+
+def test_only_a_manager_can_be_tagged(api: TestClient, make_user, admin_headers) -> None:
+    user, _ = make_user(UserRole.CLIENT, company_name="One Ltd")
+    assert (
+        api.get(f"/api/v1/admin/staff/{user.id}/clients", headers=admin_headers).status_code
+        == 404
+    )
+
+
+def test_an_inactive_manager_cannot_be_given_clients(
+    api: TestClient, make_user, admin_headers, db: Session
+) -> None:
+    manager, _ = make_user(UserRole.MANAGER, email="gone@example.com", is_active=False)
+    _user, client = make_user(UserRole.CLIENT, company_name="One Ltd")
+
+    response = api.put(
+        f"/api/v1/admin/staff/{manager.id}/clients",
+        json={"client_ids": [str(client.id)]},
+        headers=admin_headers,
+    )
+    assert response.status_code == 400
+    assert "not active" in response.json()["detail"]
+
+
 # --- Services and country ---------------------------------------------------------
 
 

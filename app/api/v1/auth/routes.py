@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.deps import CurrentUser, DbSession, get_refresh_token
+from app.core.permissions import effective_permissions
 from app.models.client import Client
 from app.schemas.auth import (
     AcceptInviteRequest,
@@ -125,6 +126,7 @@ def me(user: CurrentUser, db: DbSession) -> MeOut:
     return MeOut(
         user=UserOut.model_validate(user),
         client=ClientSummary.model_validate(client) if client else None,
+        permissions=sorted(effective_permissions(db, user)),
     )
 
 
@@ -162,6 +164,7 @@ def check_invite(token: str, db: DbSession) -> InviteCheckOut:
 
     return InviteCheckOut(
         email=invite.email,
+        role=invite.role,
         company_name=invite.prefill_company_name,
         expires_at=invite.expires_at,
         # Shown so the invitee knows what the account is being set up for. There

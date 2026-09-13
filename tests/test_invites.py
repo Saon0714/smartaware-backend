@@ -374,3 +374,112 @@ def test_staff_invitations_cannot_carry_services(
     )
     assert response.status_code == 400
     assert "client invitations" in response.json()["detail"]
+
+
+# --- Manager accounts (Section 6.1) -----------------------------------------------
+
+
+def test_admin_can_invite_a_manager_who_then_works_their_own_clients(
+    api: TestClient, db: Session, make_user, admin_headers, login
+) -> None:
+    """The whole path the Admin Portal drives: invite, accept, tag, work.
+
+    Asserted end to end because each step is only useful if the next follows —
+    a manager account that signs in but sees nothing is no use.
+    """
+    body = _invite(api, admin_headers, "mgr@example.com", role="manager")
+    assert body["invite"]["role"] == "manager"
+
+    token = _token_from(body["invite_url"])
+    session = api.post(
+        f"/api/v1/auth/invite/{token}/accept",
+        json={"password": NEW_PASSWORD, "full_name": "New Manager"},
+    )
+    assert session.status_code == 201
+    assert session.json()["user"]["role"] == "manager"
+
+    manager = db.execute(select(User).where(User.email == "mgr@example.com")).scalar_one()
+    assert manager.client is None, "a manager has no client profile"
+
+    # Signs in with the password they just chose, not the fixture default.
+    headers = login("mgr@example.com", NEW_PASSWORD)
+    # Nothing yet: an untagged manager sees an empty book, not everybody's.
+    assert api.get("/api/v1/admin/clients", headers=headers).json() == []
+
+    _user, client = make_user(UserRole.CLIENT, company_name="Tagged Ltd")
+    make_user(UserRole.CLIENT, company_name="Someone Else Ltd")
+
+    api.put(
+        f"/api/v1/admin/staff/{manager.id}/clients",
+        json={"client_ids": [str(client.id)]},
+        headers=admin_headers,
+    )
+
+    seen = api.get("/api/v1/admin/clients", headers=headers).json()
+    assert [r["company_name"] for r in seen] == ["Tagged Ltd"]
+
+    # And can do the work Section 6.3 gives them.
+    created = api.post(
+        "/api/v1/admin/tasks",
+        json={"client_id": str(client.id), "title": "Prepare year-end accounts"},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    task_id = created.json()["id"]
+
+    done = api.post(
+        f"/api/v1/admin/tasks/{task_id}/complete",
+        json={"note": "Filed and acknowledged."},
+        headers=headers,
+    )
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "completed"
+
+    # But not the one thing Section 6.1 withholds.
+    assert api.delete(f"/api/v1/admin/tasks/{task_id}", headers=headers).status_code == 403
+
+
+def test_a_manager_is_not_told_they_are_getting_a_client_portal_account(
+    api: TestClient, db: Session, admin_headers, monkeypatch
+) -> None:
+    """The same invitation creates staff accounts, so the email cannot hardcode
+    "Client Portal" — that is a new Manager's first contact with the system."""
+    from app.services.notification import service as notification_service
+
+    sent: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        notification_service,
+        "dispatch",
+        lambda message: sent.append((message.subject, message.body)) or [],
+    )
+
+    _invite(api, admin_headers, "mgr@example.com", role="manager")
+    _invite(api, admin_headers, "client@example.com")
+
+    staff_subject, staff_body = sent[0]
+    assert "Staff Portal" in staff_subject and "Staff Portal" in staff_body
+    assert "Client Portal" not in staff_body
+
+    client_subject, client_body = sent[1]
+    assert "Client Portal" in client_subject and "Client Portal" in client_body
+
+
+def test_a_manager_invitation_carries_no_company_or_services(
+    api: TestClient, db: Session, admin_headers
+) -> None:
+    body = _invite(api, admin_headers, "mgr@example.com", role="manager")
+    assert body["invite"]["prefill_company_name"] is None
+    assert body["invite"]["services"] == []
+
+
+def test_a_manager_cannot_send_invitations(api: TestClient, make_user, login) -> None:
+    """Section 6.2 puts the invite system in Admin's hands."""
+    make_user(UserRole.MANAGER, email="mgr@example.com")
+    headers = login("mgr@example.com")
+    assert api.get("/api/v1/admin/invites", headers=headers).status_code == 403
+    assert (
+        api.post(
+            "/api/v1/admin/invites", json={"email": "x@example.com"}, headers=headers
+        ).status_code
+        == 403
+    )

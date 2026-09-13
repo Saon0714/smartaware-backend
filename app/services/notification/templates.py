@@ -20,10 +20,14 @@ class Template:
 
 
 TEMPLATES: dict[NotificationEvent, Template] = {
+    # `portal_name` rather than a fixed "Client Portal": the same invitation
+    # creates staff accounts too, and telling a new Manager they are being given
+    # a client portal account is both wrong and confusing on their first contact
+    # with the system.
     NotificationEvent.INVITE_SENT: Template(
-        subject="You have been invited to the SmartAWARE Client Portal",
+        subject="You have been invited to the SmartAWARE {portal_name}",
         body=(
-            "You have been invited to create a SmartAWARE Client Portal account.\n\n"
+            "You have been invited to create a SmartAWARE {portal_name} account.\n\n"
             "Set up your account:\n{invite_url}\n\n"
             "This link can be used once and expires in {expiry_days} days.\n\n"
             "If you were not expecting this invitation, you can ignore this email."

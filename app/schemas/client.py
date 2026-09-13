@@ -108,6 +108,19 @@ class StatusChangeRequest(BaseModel):
     note: str = Field(min_length=3, max_length=1000)
 
 
+class ManagerClientsRequest(BaseModel):
+    """The full set of clients a manager should be looking after.
+
+    Replaces rather than adds: sending a list without a client they currently
+    hold takes it off them. Expressed as the whole set because that is the
+    question the screen asks — "who does this manager cover?" — and because two
+    admins editing at once then conflict visibly instead of silently merging.
+    """
+
+    client_ids: list[uuid.UUID] = Field(default_factory=list)
+    note: str | None = Field(default=None, max_length=1000)
+
+
 class ManagerAssignmentRequest(BaseModel):
     #: Null clears the assignment.
     manager_id: uuid.UUID | None = None

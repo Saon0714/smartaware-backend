@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.core.permissions import Permission, has_permission
+from app.core.permissions import Permission, effective_permissions, has_permission
 from app.core.settings_service import SettingKey, invalidate, set_setting
 from app.models.enums import UserRole
 
@@ -163,3 +163,57 @@ def test_a_client_is_refused_everywhere_under_admin(api: TestClient, make_user, 
             checked += 1
 
     assert checked > 30, f"expected to cover the admin surface, only saw {checked}"
+
+
+# --- What the caller is told they can do ------------------------------------------
+
+
+def test_effective_permissions_agree_with_the_checks_the_endpoints_make(
+    seeded_db: Session, make_user
+) -> None:
+    """The set handed to the frontend is derived from `has_permission` itself,
+    so the navigation cannot come to disagree with what the API enforces."""
+    for role in (UserRole.ADMIN, UserRole.MANAGER, UserRole.CLIENT):
+        user, _ = make_user(role)
+        granted = effective_permissions(seeded_db, user)
+        for permission in Permission:
+            assert (permission in granted) is has_permission(seeded_db, user, permission)
+
+
+def test_me_tells_a_manager_what_they_may_do(api: TestClient, make_user, login) -> None:
+    make_user(UserRole.MANAGER, email="mgr@example.com")
+    body = api.get("/api/v1/auth/me", headers=login("mgr@example.com")).json()
+    held = set(body["permissions"])
+
+    assert Permission.TASK_COMPLETE in held
+    assert Permission.CLIENT_VIEW in held
+    # The sections a Manager must not be offered.
+    assert Permission.SETTINGS_MANAGE not in held
+    assert Permission.INVITE_MANAGE not in held
+    assert Permission.TASK_DELETE not in held
+    assert Permission.CONTENT_MANAGE not in held
+
+
+def test_the_reported_set_follows_the_content_setting(
+    api: TestClient, db: Session, make_user, login
+) -> None:
+    """Content access is a runtime setting, so a role-based list in the frontend
+    would go stale the moment SmartAWARE switches it on."""
+    make_user(UserRole.MANAGER, email="mgr@example.com")
+    headers = login("mgr@example.com")
+
+    before = api.get("/api/v1/auth/me", headers=headers).json()["permissions"]
+    assert Permission.CONTENT_MANAGE not in before
+
+    set_setting(db, SettingKey.MANAGER_CAN_MANAGE_CONTENT, True)
+    db.flush()
+    invalidate()
+
+    after = api.get("/api/v1/auth/me", headers=headers).json()["permissions"]
+    assert Permission.CONTENT_MANAGE in after
+
+
+def test_an_admin_is_told_they_hold_everything(api: TestClient, make_user, login) -> None:
+    make_user(UserRole.ADMIN, email="boss@example.com")
+    body = api.get("/api/v1/auth/me", headers=login("boss@example.com")).json()
+    assert set(body["permissions"]) == {p.value for p in Permission}

@@ -22,7 +22,7 @@ from app.core.permissions import Permission
 from app.core.rate_limit import client_ip
 from app.models.audit import AuditLog
 from app.models.client import Client, client_services
-from app.models.enums import ClientStatus
+from app.models.enums import ClientStatus, UserRole
 from app.models.service import ServiceCategory
 from app.models.user import User
 from app.schemas.client import (
@@ -33,6 +33,7 @@ from app.schemas.client import (
     ClientSummary,
     ClientUpdate,
     ManagerAssignmentRequest,
+    ManagerClientsRequest,
     StaffSummary,
     StatusChangeRequest,
 )
@@ -366,6 +367,109 @@ def list_staff(
 ) -> Any:
     """Staff available for assignment."""
     return client_service.list_staff(db, managers_only=managers_only)
+
+
+def _manager_or_404(db: Session, user_id: uuid.UUID) -> User:
+    manager = db.get(User, user_id)
+    if manager is None or manager.role is not UserRole.MANAGER:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Manager not found.")
+    return manager
+
+
+@router.get(
+    "/staff/{user_id}/clients",
+    response_model=list[ClientSummary],
+    dependencies=[_can_view],
+    name="manager_clients",
+)
+def manager_clients(user_id: uuid.UUID, db: DbSession, scope: CallerClientScope) -> Any:
+    """The accounts this manager is looking after.
+
+    Scoped like every other listing, so a Manager permitted to see this cannot
+    learn about accounts outside their own reach by asking about a colleague.
+    """
+    _manager_or_404(db, user_id)
+    stmt = (
+        select(Client, User)
+        .join(User, User.id == Client.user_id)
+        .where(Client.assigned_manager_id == user_id)
+        .order_by(Client.created_at.desc(), Client.id)
+    )
+    stmt = scope.apply(stmt, Client.id)
+    rows = db.execute(stmt).all()
+    manager = db.get(User, user_id)
+    return [_summary(client, user, manager) for client, user in rows]
+
+
+@router.put(
+    "/staff/{user_id}/clients",
+    response_model=list[ClientSummary],
+    name="set_manager_clients",
+)
+def set_manager_clients(
+    user_id: uuid.UUID,
+    payload: ManagerClientsRequest,
+    request: Request,
+    admin: RequireAdmin,
+    db: DbSession,
+    scope: CallerClientScope,
+) -> Any:
+    """Tag a manager to a set of clients in one go.
+
+    Admin only — Section 6.1 gives Managers no say in their own allocation.
+
+    The same assignment the client page performs, applied per client, so each
+    move is audited individually and a client taken from another manager records
+    who lost it. Only the differences are written: re-sending an unchanged set
+    is a no-op rather than a page of identical audit entries.
+    """
+    manager = _manager_or_404(db, user_id)
+    if not manager.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That manager's account is not active.",
+        )
+
+    wanted = set(payload.client_ids)
+    found = {
+        client.id: client
+        for client in db.execute(select(Client).where(Client.id.in_(wanted))).scalars()
+    }
+    missing = [str(i) for i in wanted if i not in found]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unknown client: {', '.join(missing)}.",
+        )
+
+    current = {
+        client.id: client
+        for client in db.execute(
+            select(Client).where(Client.assigned_manager_id == user_id)
+        ).scalars()
+    }
+
+    changes = [(found[i], user_id) for i in wanted - current.keys()]
+    changes += [(client, None) for i, client in current.items() if i not in wanted]
+
+    ip = client_ip(request)
+    for client, target in changes:
+        try:
+            client_service.assign_manager(
+                db,
+                client=client,
+                manager_id=target,
+                actor=admin,
+                note=payload.note,
+                ip_address=ip,
+            )
+        except client_service.ClientError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            ) from exc
+
+    db.commit()
+    return manager_clients(user_id, db, scope)
 
 
 @router.get(

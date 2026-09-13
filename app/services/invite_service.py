@@ -148,7 +148,11 @@ def create_invite(
     notify(
         db,
         NotificationEvent.INVITE_SENT,
-        {"invite_url": build_invite_url(raw_token), "expiry_days": expiry_days},
+        {
+            "invite_url": build_invite_url(raw_token),
+            "expiry_days": expiry_days,
+            "portal_name": "Client Portal" if role is UserRole.CLIENT else "Staff Portal",
+        },
         to=email,
     )
     return invite, raw_token

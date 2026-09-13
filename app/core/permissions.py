@@ -132,6 +132,20 @@ def has_permission(db: Session, user: User, permission: Permission) -> bool:
     return False
 
 
+def effective_permissions(db: Session, user: User) -> frozenset[Permission]:
+    """Everything `user` may do right now.
+
+    Derived by asking `has_permission` for each one rather than reassembling the
+    rules, so the answer cannot drift from what the endpoints actually enforce —
+    including the two a setting turns on for Managers at runtime.
+
+    The frontend uses this to decide what to put in its navigation. That is a
+    convenience: a section it shows anyway is still refused by the API. The
+    point is to avoid offering a Manager a page that will only reject them.
+    """
+    return frozenset(p for p in Permission if has_permission(db, user, p))
+
+
 @dataclass(frozen=True)
 class ClientScope:
     """Which clients a user may reach.

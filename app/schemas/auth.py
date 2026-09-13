@@ -11,6 +11,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.core.permissions import Permission
 from app.models.enums import ClientStatus, InviteStatus, UserRole
 
 #: Applied to every password field. Length is the meaningful control; composition
@@ -61,6 +62,15 @@ class SessionOut(BaseModel):
 class MeOut(BaseModel):
     user: UserOut
     client: ClientSummary | None = None
+    #: Everything this account may do right now, including the two a setting
+    #: turns on for Managers. The web app uses it to avoid offering a section
+    #: that would only refuse them; the API enforces each one regardless.
+    #:
+    #: Typed as the enum rather than plain strings so the generated TypeScript
+    #: is a union of the real permission names. The frontend decides what to put
+    #: in its navigation from these, and a mistyped one would silently hide a
+    #: section rather than fail.
+    permissions: list[Permission] = Field(default_factory=list)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -118,6 +128,10 @@ class InviteCheckOut(BaseModel):
     """
 
     email: EmailStr
+    #: Which portal this invitation is for. Harmless to reveal — the holder of
+    #: a valid token is about to create the account — and it lets the sign-up
+    #: page stop telling a new Manager they are getting a client portal.
+    role: UserRole
     company_name: str | None
     expires_at: datetime
     #: Shown so the invitee can see what the account is being set up for.
