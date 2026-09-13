@@ -21,12 +21,15 @@ from app.core.deps import (
 from app.core.permissions import Permission
 from app.core.rate_limit import client_ip
 from app.models.audit import AuditLog
-from app.models.client import Client
+from app.models.client import Client, client_services
 from app.models.enums import ClientStatus
+from app.models.service import ServiceCategory
 from app.models.user import User
 from app.schemas.client import (
     AuditEntryOut,
     ClientDetail,
+    ClientFiltersOut,
+    ClientServiceOut,
     ClientSummary,
     ClientUpdate,
     ManagerAssignmentRequest,
@@ -57,6 +60,15 @@ def _summary(client: Client, user: User, manager: User | None) -> dict:
         "user_is_active": user.is_active,
         "last_login_at": user.last_login_at,
         "assigned_manager": StaffSummary.model_validate(manager) if manager else None,
+        # Sorted here rather than relying on the relationship's order_by: after a
+        # write, the collection in the session is in the order it was assigned,
+        # and whether it reloads depends on the session's expire-on-commit
+        # setting. Ordering the response explicitly makes it the same list every
+        # time, whoever is asking and whatever just happened.
+        "services": [
+            ClientServiceOut.model_validate(category)
+            for category in sorted(client.services, key=lambda c: (c.sort_order, c.name))
+        ],
     }
 
 
@@ -94,12 +106,18 @@ def list_clients(
     status_filter: Annotated[ClientStatus | None, Query(alias="status")] = None,
     manager_id: Annotated[uuid.UUID | None, Query()] = None,
     unassigned: Annotated[bool, Query()] = False,
+    service_id: Annotated[uuid.UUID | None, Query()] = None,
+    country: Annotated[str | None, Query(max_length=128)] = None,
     search: Annotated[str | None, Query(max_length=200)] = None,
 ) -> Any:
     stmt = (
         select(Client, User)
         .join(User, User.id == Client.user_id)
-        .order_by(Client.created_at.desc())
+        # The ID breaks ties. Accounts created in the same transaction share a
+        # created_at — `now()` is transaction-scoped — and without a tiebreaker
+        # Postgres is free to return them in a different order each time, so the
+        # list would reshuffle under the cursor after every edit.
+        .order_by(Client.created_at.desc(), Client.id)
     )
     stmt = scope.apply(stmt, Client.id)
 
@@ -109,6 +127,20 @@ def list_clients(
         stmt = stmt.where(Client.assigned_manager_id.is_(None))
     elif manager_id is not None:
         stmt = stmt.where(Client.assigned_manager_id == manager_id)
+    if service_id is not None:
+        # A subquery, not a join. Joining the link table would return one row
+        # per matching service, so a client taking several would appear several
+        # times in the list — and the whole point of the services column is that
+        # each client is listed once with all of theirs on that row.
+        stmt = stmt.where(
+            Client.id.in_(
+                select(client_services.c.client_id).where(
+                    client_services.c.category_id == service_id
+                )
+            )
+        )
+    if country:
+        stmt = stmt.where(Client.country == country)
     if search:
         pattern = f"%{search.strip()}%"
         stmt = stmt.where(
@@ -132,6 +164,52 @@ def list_clients(
     return [
         _summary(client, user, managers.get(client.assigned_manager_id)) for client, user in rows
     ]
+
+
+@router.get(
+    "/client-filters",
+    response_model=ClientFiltersOut,
+    dependencies=[_can_view],
+    name="filters",
+)
+def client_filters(db: DbSession, scope: CallerClientScope) -> Any:
+    """What the client list can usefully be filtered by.
+
+    Scoped like the list itself, so a Manager restricted to their own accounts
+    is not shown the set of countries SmartAWARE's other clients are in.
+
+    Not on a path under `/clients/` — that would sit alongside `/clients/{id}`
+    and rely on route declaration order to avoid being parsed as a client ID.
+    """
+    countries = (
+        db.execute(
+            scope.apply(
+                select(Client.country).where(Client.country.is_not(None)).distinct(),
+                Client.id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    services = db.execute(
+        select(ServiceCategory)
+        .where(
+            or_(
+                ServiceCategory.is_archived.is_(False),
+                # An archived service still filters, as long as somebody is
+                # filed under it — otherwise those clients become unreachable
+                # by the only filter that describes them.
+                ServiceCategory.id.in_(select(client_services.c.category_id)),
+            )
+        )
+        .order_by(ServiceCategory.sort_order, ServiceCategory.name)
+    ).scalars()
+
+    return ClientFiltersOut(
+        countries=sorted(countries),
+        services=[ClientServiceOut.model_validate(s) for s in services],
+    )
 
 
 @router.get(
@@ -170,10 +248,46 @@ def update_client(
     scope: CallerClientScope,
 ) -> Any:
     client, _user, _manager = _load(db, scope, client_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    fields = payload.model_dump(exclude_unset=True)
+
+    # Services are a relationship, not a column, and the IDs are caller-supplied
+    # — so they are resolved and checked rather than assigned.
+    if "service_ids" in fields:
+        client.services = _resolve_services(db, fields.pop("service_ids"))
+
+    for field, value in fields.items():
         setattr(client, field, value)
     db.commit()
     return get_client(client_id, db, scope)
+
+
+def _resolve_services(db: Session, service_ids: list[uuid.UUID]) -> list[ServiceCategory]:
+    """Turn caller-supplied IDs into categories, rejecting anything unknown.
+
+    Duplicates are collapsed rather than refused — the same service twice is a
+    request for that service, and the join table could not store it anyway.
+
+    An archived category is accepted: a client can perfectly well still be
+    engaged for something SmartAWARE has withdrawn from sale, and refusing it
+    would make an existing client's services uneditable.
+    """
+    wanted = list(dict.fromkeys(service_ids))
+    if not wanted:
+        return []
+
+    found = {
+        category.id: category
+        for category in db.execute(
+            select(ServiceCategory).where(ServiceCategory.id.in_(wanted))
+        ).scalars()
+    }
+    missing = [str(i) for i in wanted if i not in found]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unknown service: {', '.join(missing)}.",
+        )
+    return [found[i] for i in wanted]
 
 
 @router.post(

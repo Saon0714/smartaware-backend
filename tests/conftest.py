@@ -135,6 +135,7 @@ def make_user(db: Session):
         client_status: ClientStatus = ClientStatus.ACTIVE,
         assigned_manager=None,
         company_name: str | None = None,
+        country: str | None = None,
     ):
         counter["n"] += 1
         user = User(
@@ -153,6 +154,7 @@ def make_user(db: Session):
                 user_id=user.id,
                 client_ref=generate_client_ref(),
                 company_name=company_name or f"Client Co {counter['n']}",
+                country=country,
                 status=client_status,
                 assigned_manager_id=assigned_manager.id if assigned_manager else None,
             )

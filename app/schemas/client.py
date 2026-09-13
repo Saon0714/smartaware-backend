@@ -23,6 +23,20 @@ class StaffSummary(BaseModel):
     is_active: bool
 
 
+class ClientServiceOut(BaseModel):
+    """A service a client is engaged for, as shown in the admin list."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    slug: str
+    name: str
+    #: An archived service still appears on the clients who bought it — the
+    #: record of what they take is history, not a live catalogue — but the
+    #: admin UI marks it so nobody reads it as still on sale.
+    is_archived: bool
+
+
 class ClientSummary(BaseModel):
     """A row in the client list.
 
@@ -48,6 +62,9 @@ class ClientSummary(BaseModel):
     last_login_at: datetime | None
 
     assigned_manager: StaffSummary | None = None
+    #: Every service this client takes, on the one row for that client. The
+    #: list must not repeat a client per service — see `list_clients`.
+    services: list[ClientServiceOut] = Field(default_factory=list)
 
 
 class ClientDetail(ClientSummary):
@@ -77,6 +94,10 @@ class ClientUpdate(BaseModel):
     contact_email: EmailStr | None = None
     contact_phone: str | None = Field(default=None, max_length=64)
     extra: dict[str, Any] | None = None
+    #: Replaces the whole set. Omitting it leaves the services untouched;
+    #: sending an empty list clears them — the two are different requests, which
+    #: is why this is `None` by default rather than an empty list.
+    service_ids: list[uuid.UUID] | None = None
 
 
 class StatusChangeRequest(BaseModel):
@@ -106,3 +127,15 @@ class AuditEntryOut(BaseModel):
     new_value: dict[str, Any] | None
     reason: str | None
     created_at: datetime
+
+
+class ClientFiltersOut(BaseModel):
+    """The values worth filtering the client list by.
+
+    Countries come from the clients that exist rather than from the markets
+    SmartAWARE serves: the column is free text, and offering a country nobody is
+    filed under would just be a filter that always returns nothing.
+    """
+
+    countries: list[str]
+    services: list[ClientServiceOut]

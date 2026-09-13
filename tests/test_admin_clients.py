@@ -107,6 +107,194 @@ def test_filters_narrow_the_list(api: TestClient, make_user, admin_headers) -> N
     assert [r["company_name"] for r in found] == ["Held Co"]
 
 
+def test_clients_created_at_the_same_instant_have_a_defined_order(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    """Accounts created together share a created_at — `now()` is
+    transaction-scoped — so ordering on that alone leaves their relative order
+    to whatever the scan happens to produce, and the list reshuffles under the
+    cursor after an edit rewrites a row. The ID is the tiebreaker, so the order
+    is defined rather than incidental.
+    """
+    for n in range(8):
+        make_user(UserRole.CLIENT, company_name=f"Same Instant {n}")
+
+    rows = api.get("/api/v1/admin/clients", headers=admin_headers).json()
+    same_instant = [r["id"] for r in rows if r["company_name"].startswith("Same Instant")]
+    assert len(same_instant) == 8
+    # IDs are random UUIDs, so this matches insertion order only by accident.
+    assert same_instant == sorted(same_instant)
+
+
+# --- Services and country ---------------------------------------------------------
+
+
+def _service_ids(api: TestClient, headers: dict, *names: str) -> list[str]:
+    body = api.get("/api/v1/admin/client-filters", headers=headers).json()
+    by_name = {c["name"]: c["id"] for c in body["services"]}
+    return [by_name[name] for name in names]
+
+
+def test_a_client_taking_several_services_is_listed_once(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    """The services column shows all of them on the client's single row.
+
+    A join against the link table would return the client once per service,
+    which is exactly the duplication the list must not have.
+    """
+    _user, client = make_user(UserRole.CLIENT, company_name="Multi Co")
+    wanted = _service_ids(api, admin_headers, "Payroll", "VAT Services", "Bookkeeping")
+
+    response = api.patch(
+        f"/api/v1/admin/clients/{client.id}",
+        json={"service_ids": wanted},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+
+    rows = api.get("/api/v1/admin/clients", headers=admin_headers).json()
+    mine = [r for r in rows if r["company_name"] == "Multi Co"]
+    assert len(mine) == 1
+    # Returned in taxonomy order, not the order they were sent in.
+    assert [s["name"] for s in mine[0]["services"]] == [
+        "Bookkeeping",
+        "VAT Services",
+        "Payroll",
+    ]
+
+
+def test_filtering_by_service_still_lists_each_client_once(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    _user, multi = make_user(UserRole.CLIENT, company_name="Multi Co")
+    _user2, single = make_user(UserRole.CLIENT, company_name="Payroll Only")
+    make_user(UserRole.CLIENT, company_name="No Services")
+
+    payroll, vat = _service_ids(api, admin_headers, "Payroll", "VAT Services")
+    api.patch(
+        f"/api/v1/admin/clients/{multi.id}",
+        json={"service_ids": [payroll, vat]},
+        headers=admin_headers,
+    )
+    api.patch(
+        f"/api/v1/admin/clients/{single.id}",
+        json={"service_ids": [payroll]},
+        headers=admin_headers,
+    )
+
+    rows = api.get(
+        f"/api/v1/admin/clients?service_id={payroll}", headers=admin_headers
+    ).json()
+    assert sorted(r["company_name"] for r in rows) == ["Multi Co", "Payroll Only"]
+
+    rows = api.get(f"/api/v1/admin/clients?service_id={vat}", headers=admin_headers).json()
+    assert [r["company_name"] for r in rows] == ["Multi Co"]
+
+
+def test_services_are_replaced_wholesale_and_can_be_cleared(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    _user, client = make_user(UserRole.CLIENT)
+    payroll, vat = _service_ids(api, admin_headers, "Payroll", "VAT Services")
+
+    api.patch(
+        f"/api/v1/admin/clients/{client.id}",
+        json={"service_ids": [payroll, vat]},
+        headers=admin_headers,
+    )
+    body = api.patch(
+        f"/api/v1/admin/clients/{client.id}",
+        json={"service_ids": [vat]},
+        headers=admin_headers,
+    ).json()
+    assert [s["name"] for s in body["services"]] == ["VAT Services"]
+
+    body = api.patch(
+        f"/api/v1/admin/clients/{client.id}",
+        json={"service_ids": []},
+        headers=admin_headers,
+    ).json()
+    assert body["services"] == []
+
+
+def test_omitting_services_leaves_them_alone(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    """An empty list clears; omitting the field must not."""
+    _user, client = make_user(UserRole.CLIENT)
+    (payroll,) = _service_ids(api, admin_headers, "Payroll")
+    api.patch(
+        f"/api/v1/admin/clients/{client.id}",
+        json={"service_ids": [payroll]},
+        headers=admin_headers,
+    )
+
+    body = api.patch(
+        f"/api/v1/admin/clients/{client.id}",
+        json={"city": "Leeds"},
+        headers=admin_headers,
+    ).json()
+    assert [s["name"] for s in body["services"]] == ["Payroll"]
+
+
+def test_an_unknown_service_is_refused(api: TestClient, make_user, admin_headers) -> None:
+    _user, client = make_user(UserRole.CLIENT)
+    response = api.patch(
+        f"/api/v1/admin/clients/{client.id}",
+        json={"service_ids": ["00000000-0000-0000-0000-000000000001"]},
+        headers=admin_headers,
+    )
+    assert response.status_code == 422
+    assert "Unknown service" in response.json()["detail"]
+
+
+def test_the_country_filter_narrows_the_list(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    make_user(UserRole.CLIENT, company_name="UK Co", country="United Kingdom")
+    make_user(UserRole.CLIENT, company_name="Oman Co", country="Oman")
+    make_user(UserRole.CLIENT, company_name="Nowhere Co")
+
+    rows = api.get("/api/v1/admin/clients?country=Oman", headers=admin_headers).json()
+    assert [r["company_name"] for r in rows] == ["Oman Co"]
+
+
+def test_filter_options_come_from_the_clients_that_exist(
+    api: TestClient, make_user, admin_headers
+) -> None:
+    """Offering a country nobody is filed under would be a filter that always
+    returns nothing."""
+    make_user(UserRole.CLIENT, country="Oman")
+    make_user(UserRole.CLIENT, country="United Kingdom")
+    make_user(UserRole.CLIENT)
+
+    body = api.get("/api/v1/admin/client-filters", headers=admin_headers).json()
+    assert body["countries"] == ["Oman", "United Kingdom"]
+    assert "Payroll" in [s["name"] for s in body["services"]]
+
+
+def test_a_manager_is_not_shown_other_clients_countries(
+    api: TestClient, make_user, login
+) -> None:
+    """The options are scoped exactly like the list they filter."""
+    manager, _ = make_user(UserRole.MANAGER, email="scoped@example.com")
+    make_user(UserRole.CLIENT, country="Oman", assigned_manager=manager)
+    make_user(UserRole.CLIENT, country="India")
+
+    headers = login("scoped@example.com")
+    body = api.get("/api/v1/admin/client-filters", headers=headers).json()
+    assert body["countries"] == ["Oman"]
+
+
+def test_a_client_cannot_read_the_filter_options(
+    api: TestClient, make_user, login
+) -> None:
+    make_user(UserRole.CLIENT, email="nosy@example.com")
+    headers = login("nosy@example.com")
+    assert api.get("/api/v1/admin/client-filters", headers=headers).status_code == 403
+
+
 # --- Status (Section 6.2) ---------------------------------------------------------
 
 

@@ -7,7 +7,7 @@ metadata, and guarantees SQLAlchemy can resolve string-based relationships.
 from app.db.base import Base
 from app.models.audit import AuditLog
 from app.models.chat import ChatMessage, ChatSession
-from app.models.client import Client
+from app.models.client import Client, client_services
 from app.models.content import (
     Achievement,
     ContactDetail,
@@ -48,6 +48,7 @@ __all__ = [
     "ChatMessage",
     "ChatSession",
     "Client",
+    "client_services",
     "ContactDetail",
     "ContentBlock",
     "ContentListItem",
