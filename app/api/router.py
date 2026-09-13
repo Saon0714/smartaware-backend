@@ -7,6 +7,7 @@ and the full API surface is discoverable from one file.
 from fastapi import APIRouter
 
 from app.api.v1 import health
+from app.api.v1.admin import clients as admin_clients
 from app.api.v1.admin import content as admin_content
 from app.api.v1.admin import enquiries as admin_enquiries
 from app.api.v1.admin import faq as admin_faq
@@ -30,3 +31,4 @@ api_router.include_router(admin_content.router)
 api_router.include_router(admin_services.router)
 api_router.include_router(admin_enquiries.router)
 api_router.include_router(admin_faq.router)
+api_router.include_router(admin_clients.router)

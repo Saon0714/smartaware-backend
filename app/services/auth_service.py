@@ -120,10 +120,15 @@ def user_from_token(db: Session, token: str, expected_type: str = "access") -> U
     if user is None:
         raise AuthError("Token is invalid")
 
+    # Account status is checked first on purpose. Placing a client on Hold also
+    # bumps their token version, so both gates trip at once — and "your account
+    # is on hold" tells them something they can act on, where "session revoked"
+    # would just send them to a login screen that then refuses them anyway.
+    assert_account_may_hold_session(db, user)
+
     if payload.get("ver") != user.token_version:
         raise AuthError("Session has been revoked. Please sign in again.")
 
-    assert_account_may_hold_session(db, user)
     return user
 
 
