@@ -425,3 +425,38 @@ def test_notes_can_be_deleted(api: TestClient, db: Session, setup) -> None:
         == 204
     )
     assert db.execute(select(Note)).scalars().all() == []
+
+
+# --- Assigned manager (Section 5.3.C) ------------------------------------------------
+
+def test_the_client_sees_their_assigned_manager(api: TestClient, setup) -> None:
+    body = api.get("/api/v1/portal/profile", headers=setup["client"]).json()
+    assert body["assigned_manager"]["email"] == "mgr@example.com"
+
+
+def test_an_unassigned_client_sees_no_manager(
+    api: TestClient, make_user, login
+) -> None:
+    make_user(UserRole.CLIENT, email="solo@example.com")
+    body = api.get("/api/v1/portal/profile", headers=login("solo@example.com")).json()
+    assert body["assigned_manager"] is None
+
+
+def test_an_inactive_manager_is_not_shown(
+    api: TestClient, db: Session, make_user, login
+) -> None:
+    """Pointing a client at someone who has left is worse than showing nobody."""
+    manager, _ = make_user(UserRole.MANAGER, email="leaver@example.com")
+    make_user(UserRole.CLIENT, email="c2@example.com", assigned_manager=manager)
+
+    headers = login("c2@example.com")
+    assert api.get("/api/v1/portal/profile", headers=headers).json()[
+        "assigned_manager"
+    ]["email"] == "leaver@example.com"
+
+    manager.is_active = False
+    db.flush()
+
+    assert api.get("/api/v1/portal/profile", headers=headers).json()[
+        "assigned_manager"
+    ] is None

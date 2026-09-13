@@ -11,6 +11,18 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.schemas.enquiry import FormFieldOut
 
 
+class AssignedManagerOut(BaseModel):
+    """The client's point of contact — spec Section 5.3.C.
+
+    Name and email only. A client needs to know who is looking after their
+    account and how to reach them; SmartAWARE's internal user record is not
+    theirs to see.
+    """
+
+    full_name: str | None
+    email: EmailStr
+
+
 class ProfileOut(BaseModel):
     """The form to render, and what is currently stored in it.
 
@@ -24,6 +36,7 @@ class ProfileOut(BaseModel):
     client_ref: str
     status: str
     onboarding_completed_at: datetime | None
+    assigned_manager: AssignedManagerOut | None = None
 
 
 class ProfileUpdate(BaseModel):

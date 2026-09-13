@@ -16,6 +16,7 @@ from app.models.client import Client
 from app.models.note import Note
 from app.models.user import User
 from app.schemas.profile import (
+    AssignedManagerOut,
     NoteOut,
     OnboardingAnswers,
     OnboardingOut,
@@ -53,12 +54,22 @@ def my_profile(db: DbSession, scope: CallerClientScope) -> Any:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The profile form is unavailable.",
         )
+    manager = (
+        db.get(User, client.assigned_manager_id) if client.assigned_manager_id else None
+    )
     return ProfileOut(
         fields=profile_service.active_fields(form),
         values=profile_service.read_values(client, form),
         client_ref=client.client_ref,
         status=client.status.value,
         onboarding_completed_at=client.onboarding_completed_at,
+        assigned_manager=(
+            # Only while the manager is active: pointing a client at someone who
+            # has left is worse than showing nobody.
+            AssignedManagerOut(full_name=manager.full_name, email=manager.email)
+            if manager and manager.is_active
+            else None
+        ),
     )
 
 
