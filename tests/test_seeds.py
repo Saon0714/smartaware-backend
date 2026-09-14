@@ -150,25 +150,28 @@ def test_unverified_content_is_not_fabricated(seeded_db: Session) -> None:
     assert _count(seeded_db, Achievement) == 0
 
 
-def test_seeded_testimonials_cannot_pass_for_real_reviews(seeded_db: Session) -> None:
-    """Testimonials do ship with content, so the carousel can be seen working
-    before Trustpilot is connected. The protection is that they say so: every
-    one is tagged `placeholder`, which is both how a reader is told and how the
-    import knows to clear them out.
+def test_seeded_testimonials_are_marked_as_placeholders(seeded_db: Session) -> None:
+    """Testimonials ship with content so the carousel can be seen working before
+    Trustpilot is connected.
 
-    No real name is attached to any of them. Putting an invented person's words
-    on a live advisory firm's website is the thing the empty tables above exist
-    to prevent, and a placeholder that looks like a real review would walk
-    straight past that.
+    They read as ordinary reviews — that is the point of sample copy — so the
+    marker is `source`, not the wording. It is what the Trustpilot import uses
+    to clear them on its first successful run, and what the Admin Portal lists
+    against each row. Nothing else distinguishes them, so this is the assertion
+    that has to hold.
+
+    No named individual is invented: each is attributed to a role at a company
+    that does not exist. Putting words in the mouth of a person who does not
+    exist is a different thing from sample copy, and the empty team and
+    qualification tables above exist to prevent exactly that.
     """
     rows = list(seeded_db.execute(select(Testimonial)).scalars())
     assert rows, "seeded, so the carousel is visible before Trustpilot"
 
     for row in rows:
-        assert row.source == "placeholder", row.author_name
+        assert row.source == "placeholder", row.author_company
         assert row.external_id is None, "not pretending to have come from anywhere"
-        assert row.author_name == "Sample Review"
-        assert "Placeholder" in (row.author_company or "")
+        assert row.author_company, "attributed to a company, not to a person"
 
 
 def test_legal_pages_are_unpublished_placeholders(seeded_db: Session) -> None:

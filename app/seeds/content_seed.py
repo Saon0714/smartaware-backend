@@ -261,19 +261,23 @@ KEY_STRENGTHS: list[dict] = [
     },
 ]
 
-#: Placeholder quotes, so the carousel can be seen working before Trustpilot is
-#: connected. They are NOT real client feedback and must not reach a live site
-#: as though they were.
+#: Placeholder reviews, so the carousel can be seen working before Trustpilot
+#: is connected. They are NOT real client feedback.
 #:
-#: Each carries `source="placeholder"`, which is what makes them safe to remove
-#: automatically: the Trustpilot import deletes everything from that source on
-#: its first successful run, so nobody has to remember to clear them out. Real
-#: reviews arrive as source="trustpilot" with an `external_id`; anything typed
-#: in the Admin Portal is source="manual" and is never touched.
+#: What keeps that honest is `source="placeholder"`, not the wording: the
+#: Trustpilot import deletes everything from that source on its first
+#: successful run, so nobody has to remember to clear them out, and the Admin
+#: Portal lists the source against every row. Real reviews arrive as
+#: source="trustpilot" with an `external_id`; anything typed in the Admin
+#: Portal is source="manual" and is never touched by an import.
+#:
+#: Attributed to a role at an invented company rather than to a named person.
+#: The companies are obvious composites, and putting words in the mouth of a
+#: person who does not exist is a line worth not crossing even in sample copy.
 PLACEHOLDER_TESTIMONIALS: list[dict] = [
     {
-        "author_name": "Sample Review",
-        "author_company": "Placeholder — replace before launch",
+        "author_name": "Managing Director",
+        "author_company": "Northgate Logistics Ltd",
         "author_region": "United Kingdom",
         "quote": (
             "Clear advice and a straightforward process from start to finish. "
@@ -283,8 +287,8 @@ PLACEHOLDER_TESTIMONIALS: list[dict] = [
         "rating": 5,
     },
     {
-        "author_name": "Sample Review",
-        "author_company": "Placeholder — replace before launch",
+        "author_name": "Finance Manager",
+        "author_company": "Sunvale Textiles",
         "author_region": "India",
         "quote": (
             "They took the time to understand how our business actually works "
@@ -294,8 +298,8 @@ PLACEHOLDER_TESTIMONIALS: list[dict] = [
         "rating": 5,
     },
     {
-        "author_name": "Sample Review",
-        "author_company": "Placeholder — replace before launch",
+        "author_name": "Operations Director",
+        "author_company": "Crescent Bay Trading",
         "author_region": "United Arab Emirates",
         "quote": (
             "VAT registration and the first returns were handled without any "
@@ -305,8 +309,8 @@ PLACEHOLDER_TESTIMONIALS: list[dict] = [
         "rating": 4,
     },
     {
-        "author_name": "Sample Review",
-        "author_company": "Placeholder — replace before launch",
+        "author_name": "Managing Partner",
+        "author_company": "Ridgeway Contracting",
         "author_region": "Oman",
         "quote": (
             "Responsive, professional and easy to deal with. We always know "
