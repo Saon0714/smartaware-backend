@@ -21,6 +21,7 @@ from app.models.content import (
     KeyStrength,
     LegalPage,
     Milestone,
+    Testimonial,
 )
 from app.models.faq import FaqEntry
 from app.models.form_schema import FormDefinition, FormField
@@ -41,6 +42,7 @@ from app.seeds.content_seed import (
     KEY_STRENGTHS,
     LEGAL_PAGES,
     MILESTONES,
+    PLACEHOLDER_TESTIMONIALS,
 )
 from app.seeds.faq_seed import FAQ_ENTRIES
 from app.seeds.forms_seed import FORM_DEFINITIONS
@@ -161,6 +163,7 @@ def seed_content(db: Session) -> dict[str, int]:
         "milestones": 0,
         "legal": 0,
         "contact": 0,
+        "testimonials": 0,
     }
 
     for row in CONTENT_BLOCKS:
@@ -185,6 +188,22 @@ def seed_content(db: Session) -> dict[str, int]:
         if not _exists(db, KeyStrength, title=row["title"]):
             db.add(KeyStrength(**row, sort_order=i))
             counts["strengths"] += 1
+
+    # Placeholder reviews, so the carousel is visible before Trustpilot is
+    # connected. Published, because an invisible placeholder teaches nobody
+    # anything — and tagged `placeholder`, which is how the import knows to
+    # clear them out on its first successful run.
+    for i, row in enumerate(PLACEHOLDER_TESTIMONIALS, start=1):
+        if not _exists(db, Testimonial, quote=row["quote"]):
+            db.add(
+                Testimonial(
+                    **row,
+                    sort_order=i,
+                    source="placeholder",
+                    is_published=True,
+                )
+            )
+            counts["testimonials"] += 1
 
     for i, row in enumerate(MILESTONES, start=1):
         if not _exists(db, Milestone, year_label=row["year_label"], title=row["title"]):

@@ -147,7 +147,15 @@ class Achievement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class Testimonial(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Seeded empty — inventing client quotes would be fabricating evidence."""
+    """A client quote.
+
+    Shaped for Trustpilot, which is where these are meant to come from. A
+    review synced from there is identified by `external_id` so a re-sync
+    updates rather than duplicates, and `source` separates what was pulled in
+    from what SmartAWARE wrote itself — an import must never silently discard a
+    quote entered by hand, and the site should be able to say where a review
+    came from.
+    """
 
     __tablename__ = "testimonials"
 
@@ -158,6 +166,25 @@ class Testimonial(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    #: "manual" for anything typed into the Admin Portal, or the name of the
+    #: service it was imported from. Free text rather than an enum so adding a
+    #: second source later is not a migration.
+    #: `server_default` as well as a Python default: the column is NOT NULL and
+    #: was added to a table that may already hold rows, so the database has to
+    #: be able to fill it itself.
+    source: Mapped[str] = mapped_column(
+        String(32), default="manual", server_default="manual", nullable=False
+    )
+    #: The review's ID at the source. Unique, so a sync can upsert on it.
+    external_id: Mapped[str | None] = mapped_column(
+        String(128), unique=True, index=True, nullable=True
+    )
+    #: A link back to the review, which Trustpilot's terms require when its
+    #: reviews are displayed.
+    source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    #: When the review was written, which is not when the row was created.
+    reviewed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class LegalPage(UUIDPrimaryKeyMixin, TimestampMixin, Base):

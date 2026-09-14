@@ -41,6 +41,11 @@ class Region(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     # e.g. "UK Tax & Accounting Services" — the country page heading.
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The form used inside a sentence: "Professional UK Tax & Compliance
+    # Advisory". `name` is the formal one and reads badly there — "Professional
+    # United Kingdom Tax..." — so the short form is its own field rather than
+    # something derived. Falls back to `name` when unset.
+    short_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

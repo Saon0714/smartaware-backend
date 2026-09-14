@@ -136,8 +136,11 @@ def test_admin_listing_includes_unpublished_rows(api: TestClient, admin_headers)
         headers=admin_headers,
     )
     admin_rows = api.get("/api/v1/admin/content/testimonials", headers=admin_headers).json()
-    assert [r["author_name"] for r in admin_rows] == ["Draft"]
-    assert api.get("/api/v1/public/home").json()["testimonials"] == []
+    assert "Draft" in [r["author_name"] for r in admin_rows]
+    # The draft is the editor's alone until published — the seeded placeholders
+    # are published, so assert on the draft rather than on an empty list.
+    public = api.get("/api/v1/public/home").json()["testimonials"]
+    assert "Draft" not in [r["author_name"] for r in public]
 
 
 def test_team_and_testimonials_are_unpublished_by_default(api: TestClient, admin_headers) -> None:

@@ -17,7 +17,10 @@ practices.
 CONTENT_BLOCKS: list[dict] = [
     {
         "key": "home_hero",
-        "title": "Professional UK Tax & Compliance Advisory",
+        # {region} is replaced with the visitor's chosen market. Editable like
+        # any other copy — an editor can move it, reword around it, or drop it
+        # entirely, in which case the heading is simply the same everywhere.
+        "title": "Professional {region} Tax & Compliance Advisory",
         "subtitle": (
             "Supporting individuals and businesses across the United Kingdom, "
             "India, the UAE and Oman."
@@ -255,6 +258,61 @@ KEY_STRENGTHS: list[dict] = [
             "client confidence."
         ),
         "icon_key": "message",
+    },
+]
+
+#: Placeholder quotes, so the carousel can be seen working before Trustpilot is
+#: connected. They are NOT real client feedback and must not reach a live site
+#: as though they were.
+#:
+#: Each carries `source="placeholder"`, which is what makes them safe to remove
+#: automatically: the Trustpilot import deletes everything from that source on
+#: its first successful run, so nobody has to remember to clear them out. Real
+#: reviews arrive as source="trustpilot" with an `external_id`; anything typed
+#: in the Admin Portal is source="manual" and is never touched.
+PLACEHOLDER_TESTIMONIALS: list[dict] = [
+    {
+        "author_name": "Sample Review",
+        "author_company": "Placeholder — replace before launch",
+        "author_region": "United Kingdom",
+        "quote": (
+            "Clear advice and a straightforward process from start to finish. "
+            "Our year-end accounts were filed well ahead of the deadline and "
+            "every question was answered the same day."
+        ),
+        "rating": 5,
+    },
+    {
+        "author_name": "Sample Review",
+        "author_company": "Placeholder — replace before launch",
+        "author_region": "India",
+        "quote": (
+            "They took the time to understand how our business actually works "
+            "before recommending anything. The monthly bookkeeping has been "
+            "accurate and on time all year."
+        ),
+        "rating": 5,
+    },
+    {
+        "author_name": "Sample Review",
+        "author_company": "Placeholder — replace before launch",
+        "author_region": "United Arab Emirates",
+        "quote": (
+            "VAT registration and the first returns were handled without any "
+            "fuss. Having one point of contact who knows the account makes a "
+            "real difference."
+        ),
+        "rating": 4,
+    },
+    {
+        "author_name": "Sample Review",
+        "author_company": "Placeholder — replace before launch",
+        "author_region": "Oman",
+        "quote": (
+            "Responsive, professional and easy to deal with. We always know "
+            "what is outstanding and what is coming up next."
+        ),
+        "rating": 5,
     },
 ]
 

@@ -112,6 +112,36 @@ Two things are off by design, so no paid accounts are required:
 - **Email** is not sent — `USE_CONSOLE_EMAIL=true` prints it to the log.
   Read invite links with `docker compose logs api`.
 
+## 8. Optional: turn on the chatbot
+
+The chatbot is off until an OpenAI key is supplied, and it needs two things,
+not one. Seeding loads the FAQ *text*, but not the embeddings the search runs
+against — those are produced by the index job, which calls OpenAI.
+
+Open `.env` in Notepad, set the key, and save:
+
+```
+OPENAI_API_KEY=sk-...
+```
+
+Then restart and build the index:
+
+```powershell
+docker compose restart api worker beat
+docker compose exec api uv run python scripts/run_job.py reindex-faq
+```
+
+The job prints a JSON report. It embeds 15 short FAQ entries on
+`text-embedding-3-small` — a fraction of a cent, once. Re-running it is safe:
+the index is incremental and only touches entries edited since the last run.
+
+Without the key the job stops with a clear message rather than a traceback,
+and the chat endpoint returns a plain "temporarily unavailable" reply. A
+database copied from another machine does not help: every question calls
+OpenAI twice at the time it is asked — once to vectorise the question, once to
+write the answer — so the key is required even when the embeddings are already
+present.
+
 ## Everyday use
 
 ```powershell

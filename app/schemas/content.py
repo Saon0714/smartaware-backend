@@ -177,6 +177,13 @@ class TestimonialOut(_Out):
     rating: int | None
     sort_order: int
     is_published: bool
+    #: "placeholder", "manual", or the service it came from. Public because
+    #: Trustpilot's terms require a review shown on a site to be attributed and
+    #: linked back, and because the site should be able to say when a quote is
+    #: still sample copy.
+    source: str = "manual"
+    source_url: str | None = None
+    reviewed_at: date | None = None
 
 
 class TestimonialWrite(BaseModel):
@@ -187,6 +194,12 @@ class TestimonialWrite(BaseModel):
     rating: int | None = Field(default=None, ge=1, le=5)
     sort_order: int = 0
     is_published: bool = False
+    #: `source` and `external_id` are deliberately absent: they identify where a
+    #: review came from, and a quote typed into the Admin Portal came from
+    #: SmartAWARE. Letting an editor claim a review was imported would make the
+    #: attribution the site displays untrue.
+    source_url: str | None = Field(default=None, max_length=512)
+    reviewed_at: date | None = None
 
 
 class ContactDetailOut(_Out):
@@ -269,6 +282,7 @@ class ServiceTeaser(_Out):
 
 class HomePageOut(BaseModel):
     hero: ContentBlockOut | None
+    core_values: list[CoreValueOut] = Field(default_factory=list)
     key_strengths: list[KeyStrengthOut]
     services: list[ServiceTeaser]
     achievements: list[AchievementOut]

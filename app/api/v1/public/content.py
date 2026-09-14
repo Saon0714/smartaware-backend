@@ -25,6 +25,7 @@ from app.schemas.content import (
     LegalPageSummary,
 )
 from app.services import content_service as content
+from app.services import service_catalog
 
 router = APIRouter(prefix="/public", tags=["public-content"])
 
@@ -38,9 +39,21 @@ def home_page(
         Query(description="Market slug. Scopes the service teasers to what that market offers."),
     ] = None,
 ) -> HomePageOut:
+    # The hero names the market the visitor has chosen: "Professional UK Tax &
+    # Compliance Advisory", "Professional India Tax & …". Resolved here rather
+    # than in the web app so the heading is right in the HTML a crawler reads,
+    # and so the wording stays one editable string instead of a row per market.
+    market = service_catalog.get_region(db, region) if region else None
+    if market is None:
+        market = next(iter(service_catalog.published_regions(db)), None)
+
     return HomePageOut(
-        hero=content.block_payload(db, "home_hero"),
+        hero=content.localise(
+            content.block_payload(db, "home_hero"),
+            (market.short_name or market.name) if market else None,
+        ),
         key_strengths=content.key_strengths(db),
+        core_values=content.core_values(db),
         services=content.service_teasers(db, limit=service_limit, region_slug=region),
         achievements=content.achievements(db),
         testimonials=content.testimonials(db),

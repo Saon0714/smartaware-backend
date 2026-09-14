@@ -10,10 +10,13 @@ editable, addable, reorderable, publishable and archivable from the Admin
 Portal without a deploy.
 """
 
+#: `short_name` is the form used inside a sentence — "Professional UK Tax &
+#: Compliance Advisory" — where the formal name reads badly.
 REGIONS: list[dict] = [
     {
         "slug": "uk",
         "name": "United Kingdom",
+        "short_name": "UK",
         "display_name": "UK Tax & Accounting Services",
         "currency_code": "GBP",
         "sort_order": 1,
@@ -21,6 +24,7 @@ REGIONS: list[dict] = [
     {
         "slug": "india",
         "name": "India",
+        "short_name": "India",
         "display_name": "India Tax & Accounting Services",
         "currency_code": "INR",
         "sort_order": 2,
@@ -28,6 +32,7 @@ REGIONS: list[dict] = [
     {
         "slug": "uae",
         "name": "United Arab Emirates",
+        "short_name": "UAE",
         "display_name": "UAE Tax & Accounting Services",
         "currency_code": "AED",
         "sort_order": 3,
@@ -35,6 +40,7 @@ REGIONS: list[dict] = [
     {
         "slug": "oman",
         "name": "Oman",
+        "short_name": "Oman",
         "display_name": "Oman Tax & Accounting Services",
         "currency_code": "OMR",
         "sort_order": 4,

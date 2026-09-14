@@ -66,6 +66,39 @@ def block_payload(db: Session, key: str) -> dict | None:
     }
 
 
+#: The token an editor can put in homepage copy to mean "the chosen market".
+REGION_TOKEN = "{region}"
+
+
+def localise(payload: dict | None, region_name: str | None) -> dict | None:
+    """Replace the region token throughout a content block.
+
+    A plain string replacement, not `str.format`: the text is admin-written and
+    a stray brace anywhere in it would otherwise raise, turning a typo in the
+    Admin Portal into a 500 on the homepage.
+
+    With no market to name the token is removed rather than left on screen, and
+    the doubled space it leaves behind is collapsed — "Professional  Tax" is a
+    worse outcome than a slightly shorter heading.
+    """
+    if payload is None:
+        return None
+
+    def apply(value: str | None) -> str | None:
+        if not value or REGION_TOKEN not in value:
+            return value
+        if region_name:
+            return value.replace(REGION_TOKEN, region_name)
+        return value.replace(REGION_TOKEN + " ", "").replace(REGION_TOKEN, "")
+
+    return {
+        **payload,
+        "title": apply(payload.get("title")),
+        "subtitle": apply(payload.get("subtitle")),
+        "body": apply(payload.get("body")),
+    }
+
+
 def core_values(db: Session) -> list[CoreValue]:
     return _published(CoreValue, db, CoreValue.sort_order)
 
