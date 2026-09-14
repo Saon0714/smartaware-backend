@@ -194,6 +194,9 @@ CORE_VALUES: list[dict] = [
     },
 ]
 
+#: Icons are part of the seed rather than left blank. Without one the website
+#: falls back to the item's position — "01", "02" — which says nothing about the
+#: strength it sits beside. Editors can change them in the Admin Portal.
 KEY_STRENGTHS: list[dict] = [
     {
         "title": "Experience Since 2016",
@@ -201,6 +204,7 @@ KEY_STRENGTHS: list[dict] = [
             "SmartAWARE has developed experience in supporting individuals and businesses "
             "with tax, accounting and compliance requirements since 2016."
         ),
+        "icon_key": "award",
     },
     {
         "title": "Strong UK Focus",
@@ -208,6 +212,7 @@ KEY_STRENGTHS: list[dict] = [
             "The United Kingdom is our primary market, with services focused on helping "
             "individuals and businesses manage their UK tax and compliance responsibilities."
         ),
+        "icon_key": "map-pin",
     },
     {
         "title": "International Reach",
@@ -215,6 +220,7 @@ KEY_STRENGTHS: list[dict] = [
             "Since 2020, we have expanded our global reach, supporting clients in India, "
             "the UAE and Oman."
         ),
+        "icon_key": "globe",
     },
     {
         "title": "Comprehensive Accounting & Tax Services",
@@ -222,6 +228,7 @@ KEY_STRENGTHS: list[dict] = [
             "Our service categories cover personal tax, company accounting, bookkeeping, "
             "VAT, payroll, CIS, business registration, tax advisory and compliance."
         ),
+        "icon_key": "layers",
     },
     {
         "title": "Personalised Professional Service",
@@ -229,6 +236,7 @@ KEY_STRENGTHS: list[dict] = [
             "We understand that every client has different financial, personal and "
             "business circumstances. Our services are tailored to individual requirements."
         ),
+        "icon_key": "user-check",
     },
     {
         "title": "Secure Data Protection",
@@ -238,6 +246,7 @@ KEY_STRENGTHS: list[dict] = [
             "private, highly encrypted server environments and appropriate security "
             "controls to support the protection of sensitive client data."
         ),
+        "icon_key": "shield",
     },
     {
         "title": "Professional Communication",
@@ -245,6 +254,7 @@ KEY_STRENGTHS: list[dict] = [
             "We believe clear communication and timely updates are essential to building "
             "client confidence."
         ),
+        "icon_key": "message",
     },
 ]
 
