@@ -13,7 +13,7 @@ x-service-urls: &service-urls
 
 services:
   db:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: smartaware
       POSTGRES_PASSWORD: smartaware

@@ -11,7 +11,7 @@ OpenAPI schema this service publishes at `/openapi.json`.
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)
-- PostgreSQL 16 with the `pgvector` extension
+- PostgreSQL 17 with the `pgvector` extension
 - Redis 7+
 
 ## Local setup
@@ -36,8 +36,8 @@ role for the test suite; **do not grant `CREATEDB` in production**.
 macOS via Homebrew:
 
 ```bash
-brew install postgresql@16 pgvector redis
-brew services start postgresql@16
+brew install postgresql@17 pgvector redis
+brew services start postgresql@17
 brew services start redis
 ```
 
