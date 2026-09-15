@@ -1,11 +1,14 @@
 """FastAPI application factory."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.db import schema_version
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
@@ -24,8 +27,22 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{tag}_{route.name}"
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Say so at startup if the database is behind on migrations.
+
+    A pull that brings new columns leaves an existing database one migration
+    short, and the only symptom is a 500 on every page that reads the changed
+    table. Logging it here turns that into a sentence naming the command to
+    run.
+    """
+    schema_version.warn_if_stale()
+    yield
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
+        lifespan=lifespan,
         title=settings.PROJECT_NAME,
         version="0.1.0",
         openapi_url="/openapi.json",

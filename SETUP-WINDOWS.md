@@ -142,6 +142,22 @@ OpenAI twice at the time it is asked — once to vectorise the question, once to
 write the answer — so the key is required even when the embeddings are already
 present.
 
+## Updating after a `git pull`
+
+```powershell
+cd C:\smartaware\smartaware-backend
+docker compose up -d --build
+docker compose exec api uv run alembic upgrade head
+docker compose exec api uv run python scripts/seed.py
+```
+
+Skipping the migration is the usual cause of the website showing an error where
+content should be: the code expects a column the database does not have yet.
+`docker compose logs api` says so in as many words at startup, and
+<http://localhost:8000/api/v1/health> reports `schema_status`.
+
+Then, in the frontend folder, `npm install` and `npm run dev` again.
+
 ## Everyday use
 
 ```powershell

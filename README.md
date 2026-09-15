@@ -14,6 +14,25 @@ OpenAPI schema this service publishes at `/openapi.json`.
 - PostgreSQL 17 with the `pgvector` extension
 - Redis 7+
 
+## After pulling
+
+Run this first, every time:
+
+```bash
+uv run alembic upgrade head
+uv run python scripts/seed.py
+```
+
+A pull that brings new columns leaves an existing database a migration short,
+and the only symptom is `500` on every page that reads a changed table. The API
+logs a line naming the problem at startup, and `GET /api/v1/health` reports
+`schema_status`, but neither helps if nobody looks.
+
+Migrations also carry updates to content that was seeded by an earlier build —
+only for rows that still hold the previous seeded value, so nothing edited in
+the Admin Portal is touched. The seeder inserts what is missing and never
+updates, which is why both commands are needed.
+
 ## Local setup
 
 ```bash
