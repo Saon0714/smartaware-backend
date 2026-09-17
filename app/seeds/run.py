@@ -21,6 +21,7 @@ from app.models.content import (
     KeyStrength,
     LegalPage,
     Milestone,
+    SocialLink,
     Testimonial,
 )
 from app.models.faq import FaqEntry
@@ -43,6 +44,7 @@ from app.seeds.content_seed import (
     LEGAL_PAGES,
     MILESTONES,
     PLACEHOLDER_TESTIMONIALS,
+    SOCIAL_LINKS,
 )
 from app.seeds.faq_seed import FAQ_ENTRIES
 from app.seeds.forms_seed import FORM_DEFINITIONS
@@ -163,6 +165,7 @@ def seed_content(db: Session) -> dict[str, int]:
         "milestones": 0,
         "legal": 0,
         "contact": 0,
+        "social": 0,
         "testimonials": 0,
     }
 
@@ -216,9 +219,27 @@ def seed_content(db: Session) -> dict[str, int]:
             counts["legal"] += 1
 
     for row in CONTACT_DETAILS:
-        if not _exists(db, ContactDetail, label=row["label"]):
-            db.add(ContactDetail(**row))
-            counts["contact"] += 1
+        if _exists(db, ContactDetail, label=row["label"]):
+            continue
+        # A detail can belong to one market — the new-business numbers do. The
+        # slug is resolved here so the seed data does not carry database IDs.
+        fields = dict(row)
+        slug = fields.pop("region_slug", None)
+        region_id = None
+        if slug:
+            region = db.execute(select(Region).where(Region.slug == slug)).scalar_one_or_none()
+            if region is None:
+                # The markets are seeded before this runs, so this means the
+                # slug is wrong. Skipping beats attaching it to nothing.
+                continue
+            region_id = region.id
+        db.add(ContactDetail(**fields, region_id=region_id))
+        counts["contact"] += 1
+
+    for row in SOCIAL_LINKS:
+        if not _exists(db, SocialLink, platform=row["platform"]):
+            db.add(SocialLink(**row))
+            counts["social"] += 1
 
     return counts
 

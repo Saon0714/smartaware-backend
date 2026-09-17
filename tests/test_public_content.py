@@ -236,24 +236,61 @@ def test_ordering_follows_sort_order(api: TestClient, db: Session) -> None:
 # --- Contact ------------------------------------------------------------------
 
 
-def test_contact_details_are_withheld_until_supplied(api: TestClient) -> None:
-    """Seeded as unpublished placeholders, so the page cannot show an invented
-    address as though it were real."""
+def test_contact_details_are_the_ones_smartaware_supplied(api: TestClient) -> None:
+    """These shipped as unpublished placeholders so the page could not show an
+    invented address as though it were real. Now that real ones exist, the thing
+    worth asserting is that no placeholder survived into the published set."""
     body = api.get("/api/v1/public/contact").json()
-    assert body["details"] == []
-    assert body["social_links"] == []
+    assert body["details"], "supplied, so the page has something to show"
+
+    values = [d["value"] for d in body["details"]]
+    assert not any("AWAITING" in v for v in values), values
+    assert "info@smartaware.co.uk" in values
+    assert any("E6 2JA" in v for v in values), "the registered office"
+
+    platforms = {s["platform"] for s in body["social_links"]}
+    assert platforms == {"LinkedIn", "Facebook"}
 
 
-def test_publishing_a_contact_detail_surfaces_it(api: TestClient, db: Session) -> None:
+def test_each_market_has_its_own_new_business_number(api: TestClient) -> None:
+    """`region_id` on a contact detail exists for exactly this: the Contact page
+    puts the visitor's own market first rather than listing four unexplained
+    numbers."""
+    details = api.get("/api/v1/public/contact").json()["details"]
+    by_market = [d for d in details if d["detail_type"] == "department"]
+
+    assert len(by_market) == 4
+    assert all(d["region_id"] for d in by_market), "each is scoped to one market"
+    assert len({d["region_id"] for d in by_market}) == 4, "one per market, not four on one"
+    # International format, so tel: and wa.me work from the other three markets.
+    assert all(d["value"].startswith("+") for d in by_market)
+
+
+def test_an_unpublished_detail_is_still_withheld(api: TestClient, db: Session) -> None:
+    """The guard that made the placeholders safe has to still work."""
     from app.models.content import ContactDetail
 
-    row = db.execute(select(ContactDetail).where(ContactDetail.detail_type == "email")).scalar_one()
-    row.value = "hello@smartaware.example"
-    row.is_published = True
+    row = db.execute(
+        select(ContactDetail).where(ContactDetail.detail_type == "email")
+    ).scalar_one()
+    row.is_published = False
     db.flush()
 
     details = api.get("/api/v1/public/contact").json()["details"]
-    assert [d["value"] for d in details] == ["hello@smartaware.example"]
+    assert not any(d["detail_type"] == "email" for d in details)
+
+
+def test_editing_a_contact_detail_changes_the_page(api: TestClient, db: Session) -> None:
+    from app.models.content import ContactDetail
+
+    row = db.execute(
+        select(ContactDetail).where(ContactDetail.detail_type == "email")
+    ).scalar_one()
+    row.value = "hello@smartaware.example"
+    db.flush()
+
+    values = [d["value"] for d in api.get("/api/v1/public/contact").json()["details"]]
+    assert "hello@smartaware.example" in values
 
 
 # --- Legal --------------------------------------------------------------------

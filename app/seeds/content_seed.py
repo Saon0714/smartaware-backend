@@ -391,40 +391,113 @@ LEGAL_PAGES: list[dict] = [
 
 # The brief specifies a Contact page but supplies no actual details, so these
 # are labelled placeholders rather than invented addresses or phone numbers.
+#: Supplied by SmartAWARE.
+#:
+#: Numbers are stored in international format even where a national one was
+#: given, because `tel:` and `wa.me` links only work from abroad that way — and
+#: this site is read in four countries.
+#:
+#: The new-business numbers are scoped to a market, which is what `region_id`
+#: on this table is for: a visitor who has chosen Oman should be given the Oman
+#: number first. They are labelled by market rather than by the person who
+#: answers them — a name on a public page is that person's to volunteer.
 CONTACT_DETAILS: list[dict] = [
     {
         "label": "Registered Office",
         "detail_type": "address",
-        "value": "[AWAITING SMARTAWARE]",
-        "is_published": False,
+        "value": (
+            "Office 19228\n"
+            "182-184 High St North\n"
+            "East Ham\n"
+            "London\n"
+            "E6 2JA"
+        ),
+        "is_published": True,
         "sort_order": 1,
     },
     {
         "label": "General Enquiries",
         "detail_type": "email",
-        "value": "[AWAITING SMARTAWARE]",
-        "is_published": False,
+        "value": "info@smartaware.co.uk",
+        "is_published": True,
         "sort_order": 2,
     },
     {
         "label": "Telephone",
         "detail_type": "phone",
-        "value": "[AWAITING SMARTAWARE]",
-        "is_published": False,
+        "value": "+44 20 3051 6990",
+        "is_published": True,
         "sort_order": 3,
     },
     {
         "label": "WhatsApp",
         "detail_type": "whatsapp",
-        "value": "[AWAITING SMARTAWARE]",
-        "is_published": False,
+        "value": "+44 20 3051 6990",
+        "is_published": True,
         "sort_order": 4,
     },
     {
         "label": "Working Hours",
         "detail_type": "hours",
-        "value": "[AWAITING SMARTAWARE]",
-        "is_published": False,
+        "value": (
+            "8am to 5pm BST, Monday to Friday\n"
+            "Closed weekends and UK bank holidays"
+        ),
+        "is_published": True,
         "sort_order": 5,
+    },
+    {
+        "label": "Find Us",
+        "detail_type": "map",
+        "value": "https://maps.app.goo.gl/eMpxVM8orNPKhW6w5",
+        "is_published": True,
+        "sort_order": 6,
+    },
+    {
+        "label": "New Business Enquiries — United Kingdom",
+        "detail_type": "department",
+        "value": "+44 7588 755131",
+        "region_slug": "uk",
+        "is_published": True,
+        "sort_order": 10,
+    },
+    {
+        "label": "New Business Enquiries — India",
+        "detail_type": "department",
+        "value": "+91 94743 00860",
+        "region_slug": "india",
+        "is_published": True,
+        "sort_order": 11,
+    },
+    {
+        "label": "New Business Enquiries — United Arab Emirates",
+        "detail_type": "department",
+        "value": "+971 58 603 2026",
+        "region_slug": "uae",
+        "is_published": True,
+        "sort_order": 12,
+    },
+    {
+        "label": "New Business Enquiries — Oman",
+        "detail_type": "department",
+        "value": "+968 7786 9366",
+        "region_slug": "oman",
+        "is_published": True,
+        "sort_order": 13,
+    },
+]
+
+SOCIAL_LINKS: list[dict] = [
+    {
+        "platform": "LinkedIn",
+        "url": "https://uk.linkedin.com/company/smartawareuk",
+        "is_published": True,
+        "sort_order": 1,
+    },
+    {
+        "platform": "Facebook",
+        "url": "https://www.facebook.com/SmartAWARE.UK",
+        "is_published": True,
+        "sort_order": 2,
     },
 ]
