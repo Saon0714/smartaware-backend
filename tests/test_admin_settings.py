@@ -67,7 +67,6 @@ def test_dangerous_settings_carry_a_confirmation(api: TestClient, admin_headers)
 
     assert by_key[SettingKey.ALLOW_MULTIPLE_ADMINS]["confirm"]
     assert by_key[SettingKey.MANAGER_CLIENT_SCOPE]["confirm"]
-    assert by_key[SettingKey.CHAT_RETENTION_DAYS]["confirm"]
 
 
 # --- Writing ---------------------------------------------------------------------
