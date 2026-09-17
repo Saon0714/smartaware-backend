@@ -129,6 +129,19 @@ CONTENT_BLOCKS: list[dict] = [
         ),
         "sort_order": 8,
     },
+    {
+        # The footer's standfirst. It was the last piece of public prose still
+        # written into the frontend, which put it out of reach of the people
+        # who own the wording.
+        "key": "footer_blurb",
+        "title": "Footer introduction",
+        "body": (
+            "Professional tax, accounting and compliance advisory services for "
+            "individuals and businesses in the United Kingdom, India, the UAE "
+            "and Oman."
+        ),
+        "sort_order": 9,
+    },
 ]
 
 CONTENT_LIST_ITEMS: dict[str, list[str]] = {

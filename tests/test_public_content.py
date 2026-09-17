@@ -11,12 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.content import (
+    ContactDetail,
     ContentBlock,
     LegalPage,
     Qualification,
     TeamMember,
     Testimonial,
 )
+from app.models.enums import UserRole
 
 
 def test_home_returns_seeded_hero(api: TestClient) -> None:
@@ -84,9 +86,7 @@ def test_the_hero_falls_back_to_the_primary_market(api: TestClient, query: str) 
     assert body["hero"]["title"] == "Professional UK Tax & Compliance Advisory"
 
 
-def test_renaming_a_market_renames_the_heading(
-    api: TestClient, db: Session
-) -> None:
+def test_renaming_a_market_renames_the_heading(api: TestClient, db: Session) -> None:
     from app.models.service import Region
 
     region = db.execute(select(Region).where(Region.slug == "india")).scalar_one()
@@ -97,9 +97,7 @@ def test_renaming_a_market_renames_the_heading(
     assert body["hero"]["title"] == "Professional Bhārat Tax & Compliance Advisory"
 
 
-def test_a_market_without_a_short_name_uses_its_full_one(
-    api: TestClient, db: Session
-) -> None:
+def test_a_market_without_a_short_name_uses_its_full_one(api: TestClient, db: Session) -> None:
     from app.models.service import Region
 
     region = db.execute(select(Region).where(Region.slug == "uk")).scalar_one()
@@ -110,14 +108,10 @@ def test_a_market_without_a_short_name_uses_its_full_one(
     assert body["hero"]["title"] == "Professional United Kingdom Tax & Compliance Advisory"
 
 
-def test_a_stray_brace_in_admin_copy_does_not_break_the_page(
-    api: TestClient, db: Session
-) -> None:
+def test_a_stray_brace_in_admin_copy_does_not_break_the_page(api: TestClient, db: Session) -> None:
     """The substitution is a replacement, not a format string. `str.format`
     would turn a typo in the Admin Portal into a 500 on the homepage."""
-    block = db.execute(
-        select(ContentBlock).where(ContentBlock.key == "home_hero")
-    ).scalar_one()
+    block = db.execute(select(ContentBlock).where(ContentBlock.key == "home_hero")).scalar_one()
     block.title = "Professional {region} Tax {and} Compliance {"
     db.flush()
 
@@ -129,9 +123,7 @@ def test_a_stray_brace_in_admin_copy_does_not_break_the_page(
 def test_dropping_the_token_makes_the_heading_the_same_everywhere(
     api: TestClient, db: Session
 ) -> None:
-    block = db.execute(
-        select(ContentBlock).where(ContentBlock.key == "home_hero")
-    ).scalar_one()
+    block = db.execute(select(ContentBlock).where(ContentBlock.key == "home_hero")).scalar_one()
     block.title = "Tax and compliance, handled"
     db.flush()
 
@@ -144,9 +136,7 @@ def test_home_carries_the_core_values(api: TestClient) -> None:
     """Shown on the homepage as well as About, from the one set of rows."""
     home = api.get("/api/v1/public/home").json()
     about = api.get("/api/v1/public/about").json()
-    assert [v["title"] for v in home["core_values"]] == [
-        v["title"] for v in about["core_values"]
-    ]
+    assert [v["title"] for v in home["core_values"]] == [v["title"] for v in about["core_values"]]
     assert len(home["core_values"]) == 6
 
 
@@ -268,11 +258,7 @@ def test_each_market_has_its_own_new_business_number(api: TestClient) -> None:
 
 def test_an_unpublished_detail_is_still_withheld(api: TestClient, db: Session) -> None:
     """The guard that made the placeholders safe has to still work."""
-    from app.models.content import ContactDetail
-
-    row = db.execute(
-        select(ContactDetail).where(ContactDetail.detail_type == "email")
-    ).scalar_one()
+    row = db.execute(select(ContactDetail).where(ContactDetail.detail_type == "email")).scalar_one()
     row.is_published = False
     db.flush()
 
@@ -281,11 +267,7 @@ def test_an_unpublished_detail_is_still_withheld(api: TestClient, db: Session) -
 
 
 def test_editing_a_contact_detail_changes_the_page(api: TestClient, db: Session) -> None:
-    from app.models.content import ContactDetail
-
-    row = db.execute(
-        select(ContactDetail).where(ContactDetail.detail_type == "email")
-    ).scalar_one()
+    row = db.execute(select(ContactDetail).where(ContactDetail.detail_type == "email")).scalar_one()
     row.value = "hello@smartaware.example"
     db.flush()
 
@@ -335,3 +317,34 @@ def test_unknown_content_key_is_404(api: TestClient) -> None:
 )
 def test_public_endpoints_need_no_authentication(api: TestClient, path: str) -> None:
     assert api.get(path).status_code == 200
+
+
+def test_the_footer_blurb_is_content_rather_than_code(api: TestClient) -> None:
+    """It appears on every page, so it was the one paragraph SmartAWARE could
+    not change without a deploy."""
+    response = api.get("/api/v1/public/content/footer_blurb")
+    assert response.status_code == 200
+    assert "tax, accounting and compliance" in response.json()["body"]
+
+
+def test_editing_a_contact_detail_reaches_both_places(
+    api: TestClient, db: Session, make_user, login
+) -> None:
+    """The Contact page and the footer read the same rows, which is what lets
+    one edit change a number everywhere it is shown."""
+    make_user(UserRole.ADMIN, email="editor@example.com")
+    headers = login("editor@example.com")
+
+    row = db.execute(select(ContactDetail).where(ContactDetail.detail_type == "phone")).scalar_one()
+    updated = api.patch(
+        f"/api/v1/admin/content/contact-details/{row.id}",
+        json={"value": "+44 20 7946 0000"},
+        headers=headers,
+    )
+    assert updated.status_code == 200
+
+    # One endpoint serves both: the Contact page renders every detail, the
+    # footer picks the first of each kind out of the same payload.
+    details = api.get("/api/v1/public/contact").json()["details"]
+    phones = [d["value"] for d in details if d["detail_type"] == "phone"]
+    assert phones == ["+44 20 7946 0000"]
