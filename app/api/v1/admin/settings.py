@@ -98,7 +98,19 @@ def _coerce(row: Setting, value: Any) -> Any:
                 )
         return value.strip()
 
-    # JSON. The email lists are the case worth checking: a typo here means a
+    # JSON.
+    if spec and spec.control == "multi_choice":
+        allowed = {v for v, _ in spec.choices}
+        if not isinstance(value, list) or any(v not in allowed for v in value):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Must be a list drawn from: {', '.join(sorted(allowed))}.",
+            )
+        # Stored in the order the choices are declared, not the order they were
+        # clicked, so the value reads the same however it was edited.
+        return [v for v, _ in spec.choices if v in set(value)]
+
+    # The email lists are the case worth checking: a typo here means a
     # notification silently goes nowhere.
     if spec and spec.control == "email_list":
         if not isinstance(value, list):

@@ -211,3 +211,36 @@ def test_enabling_manager_content_access_through_the_screen(
     assert api.get("/api/v1/admin/faq", headers=headers).status_code == 403
     _patch(api, admin_headers, SettingKey.MANAGER_CAN_MANAGE_CONTENT, True)
     assert api.get("/api/v1/admin/faq", headers=headers).status_code == 200
+
+
+# --- Roles requiring MFA (a picked list, not typed JSON) -----------------------
+
+
+def test_mfa_roles_are_offered_as_choices(api: TestClient, admin_headers) -> None:
+    """Editors pick roles; nobody should have to type a JSON array."""
+    groups = api.get("/api/v1/admin/settings", headers=admin_headers).json()
+    setting = next(
+        s
+        for group in groups
+        for s in group["settings"]
+        if s["key"] == SettingKey.MFA_REQUIRED_ROLES
+    )
+    assert setting["control"] == "multi_choice"
+    assert [c["value"] for c in setting["choices"]] == ["admin", "manager", "client"]
+
+
+def test_mfa_roles_are_stored_in_the_declared_order(api: TestClient, admin_headers) -> None:
+    response = _patch(api, admin_headers, SettingKey.MFA_REQUIRED_ROLES, ["client", "admin"])
+    assert response.status_code == 200
+    assert response.json()["value"] == ["admin", "client"]
+
+
+def test_mfa_roles_reject_an_unknown_role(api: TestClient, admin_headers) -> None:
+    refused = _patch(api, admin_headers, SettingKey.MFA_REQUIRED_ROLES, ["admin", "auditor"])
+    assert refused.status_code == 422
+
+
+def test_mfa_roles_reject_a_bare_string(api: TestClient, admin_headers) -> None:
+    """The old text control would have sent '["admin"]' as a string."""
+    refused = _patch(api, admin_headers, SettingKey.MFA_REQUIRED_ROLES, '["admin"]')
+    assert refused.status_code == 422

@@ -18,14 +18,15 @@ from typing import Literal
 
 from app.core.settings_service import SettingKey
 
-Control = Literal["number", "toggle", "text", "choice", "email_list"]
+Control = Literal["number", "toggle", "text", "choice", "multi_choice", "email_list"]
 
 
 @dataclass(frozen=True)
 class SettingSpec:
     control: Control
     label: str
-    #: For `choice`: allowed values paired with what to show the editor.
+    #: For `choice` and `multi_choice`: allowed values paired with what to show
+    #: the editor. A `multi_choice` value is the list of values chosen.
     choices: tuple[tuple[str, str], ...] = ()
     minimum: float | None = None
     maximum: float | None = None
@@ -111,8 +112,15 @@ SETTING_SPECS: dict[str, SettingSpec] = {
         label="Managers can edit website content and FAQ",
     ),
     SettingKey.MFA_REQUIRED_ROLES: SettingSpec(
-        control="text",
+        # A list of role names, so the editor picks roles rather than typing
+        # the JSON the column happens to store.
+        control="multi_choice",
         label="Roles requiring multi-factor authentication",
+        choices=(
+            ("admin", "Administrators"),
+            ("manager", "Managers"),
+            ("client", "Clients"),
+        ),
         hint=(
             "Not yet enforced — the sign-in step arrives with the security "
             "hardening work. The setting exists so the decision is recorded."
