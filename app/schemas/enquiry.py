@@ -25,6 +25,9 @@ class FormFieldOut(BaseModel):
     placeholder: str | None
     help_text: str | None
     is_required: bool
+    #: Always true on the public form — a retired field is not part of it. The
+    #: Admin Portal asks for those too, so it can show what was switched off.
+    is_active: bool = True
     options: list[Any] | None
     validation: dict[str, Any] | None
     sort_order: int

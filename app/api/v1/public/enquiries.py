@@ -10,7 +10,8 @@ from app.core import rate_limit
 from app.core.config import settings
 from app.core.deps import DbSession
 from app.schemas.enquiry import EnquiryAccepted, EnquiryCreate, FormDefinitionOut
-from app.services import enquiry_service
+from app.schemas.service import EnquiryCatalogueOut
+from app.services import enquiry_service, service_catalog
 from app.services.notification import NotificationEvent, dispatch, prepare
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,26 @@ def get_form(form_key: str, db: DbSession) -> FormDefinitionOut:
     if form is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found.")
     return FormDefinitionOut.model_validate(enquiry_service.describe_form(db, form))
+
+
+@router.get(
+    "/enquiry-catalogue",
+    response_model=EnquiryCatalogueOut,
+    summary="Services and their specific services, per market",
+)
+def enquiry_catalogue(db: DbSession) -> EnquiryCatalogueOut:
+    """What the enquiry form narrows itself with.
+
+    The whole tree at once, because the narrowing happens as the person ticks
+    boxes: choosing a market decides which services are offered, and choosing
+    services decides which specific services are. A round trip per tick would
+    be slower and would leave the form unusable whenever the API is briefly
+    unreachable — as it stands, the form falls back to the unnarrowed lists.
+
+    Names are the ones that market uses, so a service India lists as "VAT / GST
+    Services" is named that way in an enquiry sent from India's page.
+    """
+    return EnquiryCatalogueOut(markets=service_catalog.enquiry_catalogue(db))
 
 
 @router.post(

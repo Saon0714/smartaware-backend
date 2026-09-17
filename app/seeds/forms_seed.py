@@ -29,25 +29,34 @@ FORM_DEFINITIONS: list[dict] = [
             },
             {
                 "key": "service_required",
-                "label": "Service Required",
-                "field_type": F.SELECT,
+                "label": "Services Required",
+                # More than one, because an enquiry is rarely about exactly one
+                # thing — a new company usually needs registration, bookkeeping
+                # and payroll in the same breath.
+                "field_type": F.MULTISELECT,
                 "is_required": False,
                 # Populated at render time from the live service taxonomy, so the
                 # form and the website can never list different services.
                 "options": [],
-                "help_text": "Options are sourced from the published service categories.",
+                "help_text": "Choose as many as apply.",
             },
             {
-                "key": "nature_of_requirement",
-                "label": "Nature of Requirement",
-                "field_type": F.TEXTAREA,
+                "key": "sub_services",
+                "label": "Specific Services",
+                "field_type": F.MULTISELECT,
                 "is_required": False,
+                # Narrowed in the browser from the catalogue: which market, then
+                # which services. Stored options would go stale the moment a
+                # service was renamed for one market.
+                "options": [],
+                "help_text": "Follows from the country and services chosen above.",
             },
             {
                 "key": "additional_information",
                 "label": "Additional Information",
                 "field_type": F.TEXTAREA,
                 "is_required": False,
+                "help_text": "Anything else you would like us to know. Optional.",
             },
         ],
     },

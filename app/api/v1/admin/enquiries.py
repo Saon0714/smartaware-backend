@@ -84,7 +84,9 @@ def get_form(form_key: str, db: DbSession) -> Any:
     form = enquiry_service.get_form(db, form_key)
     if form is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Form not found.")
-    return enquiry_service.describe_form(db, form)
+    # Retired fields included: an editor has to be able to see what they
+    # switched off, and to switch it back on.
+    return enquiry_service.describe_form(db, form, include_inactive=True)
 
 
 def _form_or_404(db, form_key: str) -> FormDefinition:

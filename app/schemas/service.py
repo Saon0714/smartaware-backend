@@ -195,6 +195,13 @@ class RegionalServiceDetail(RegionalServiceSummary):
         default_factory=list,
         description="Published subcategories offered in this market.",
     )
+    sub_services: list[str] = Field(
+        default_factory=list,
+        description=(
+            "`subcategories` and `details` as one list, deduplicated and tidied — "
+            "what a visitor is shown, and what an enquiry can name."
+        ),
+    )
     other_regions: list[RegionOut] = Field(
         default_factory=list,
         description="Other markets offering this service.",
@@ -215,3 +222,34 @@ class ServiceHubCategory(ServiceCategorySummary):
 class ServiceHubOut(BaseModel):
     regions: list[RegionOut]
     categories: list[ServiceHubCategory]
+
+
+# --- Enquiry catalogue --------------------------------------------------------
+
+
+class SubServiceOption(BaseModel):
+    """One specific service, as the enquiry form offers it.
+
+    `label` is what the person reads, under a heading naming the service.
+    `value` additionally names the service, because sub-service names are not
+    unique across the catalogue and a stored answer has no heading above it.
+    """
+
+    value: str
+    label: str
+
+
+class CatalogueService(BaseModel):
+    name: str
+    sub_services: list[SubServiceOption] = Field(default_factory=list)
+
+
+class CatalogueMarket(BaseModel):
+    country: str = Field(description="Matches an option of the form's Country field.")
+    services: list[CatalogueService] = Field(default_factory=list)
+
+
+class EnquiryCatalogueOut(BaseModel):
+    """What the enquiry form narrows its own options with."""
+
+    markets: list[CatalogueMarket] = Field(default_factory=list)

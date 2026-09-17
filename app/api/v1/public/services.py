@@ -92,10 +92,15 @@ def region_service_detail(
         )
 
     category, resolved = found
+    details = catalog.detail_bullets(db, category.id)
+    subcategories = catalog.subcategories_for_region(db, category.id, region.id)
     return RegionalServiceDetail(
         **resolved,
-        details=catalog.detail_bullets(db, category.id),
-        subcategories=catalog.subcategories_for_region(db, category.id, region.id),
+        details=details,
+        subcategories=subcategories,
+        # Merged here rather than in the page, so the list a visitor clicks
+        # "Enquire" on and the list the enquiry form offers are the same list.
+        sub_services=catalog.merge_sub_services(subcategories, details),
         other_regions=[
             RegionOut.model_validate(r)
             for r in catalog.other_regions_offering(db, category.id, region.id)

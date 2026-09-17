@@ -49,7 +49,7 @@ VALID = {
     "phone": "+44 7700 900000",
     "country": "United Kingdom",
     "company_name": "Smith Ltd",
-    "nature_of_requirement": "Need help with a self assessment return.",
+    "additional_information": "Need help with a self assessment return.",
 }
 
 
@@ -66,7 +66,7 @@ def test_form_definition_is_served_from_the_database(api: TestClient) -> None:
         "country",
         "company_name",
         "service_required",
-        "nature_of_requirement",
+        "sub_services",
         "additional_information",
     ]
 
@@ -76,7 +76,11 @@ def test_service_options_come_from_the_live_taxonomy(api: TestClient) -> None:
     form = api.get("/api/v1/public/forms/enquiry").json()
     field = next(f for f in form["fields"] if f["key"] == "service_required")
     assert "Personal Tax" in field["options"]
-    assert len(field["options"]) == 12
+    # Thirteen names for twelve services: a market can rename one, and until
+    # the person says which market they are in, both names have to be offered.
+    # India lists "VAT / GST Services" where the UK lists "VAT Services".
+    assert len(field["options"]) == 13
+    assert {"VAT Services", "VAT / GST Services"} <= set(field["options"])
 
 
 def test_archiving_a_service_removes_it_from_the_form(
@@ -105,7 +109,7 @@ def test_a_valid_submission_is_stored(api: TestClient, db: Session) -> None:
     enquiry = db.execute(select(Enquiry)).scalar_one()
     assert enquiry.name == "Jane Smith"
     assert enquiry.email == "jane@example.com"
-    assert enquiry.payload["nature_of_requirement"].startswith("Need help")
+    assert enquiry.payload["additional_information"].startswith("Need help")
     assert enquiry.is_handled is False
 
 
@@ -194,7 +198,7 @@ def test_deactivated_field_disappears_but_history_survives(
 def test_service_required_must_be_a_real_service(api: TestClient) -> None:
     response = api.post(
         "/api/v1/public/enquiries",
-        json={"answers": {**VALID, "service_required": "Something invented"}},
+        json={"answers": {**VALID, "service_required": ["Something invented"]}},
     )
     assert response.status_code == 422
 
@@ -202,7 +206,7 @@ def test_service_required_must_be_a_real_service(api: TestClient) -> None:
 def test_overlong_answers_are_rejected(api: TestClient) -> None:
     response = api.post(
         "/api/v1/public/enquiries",
-        json={"answers": {**VALID, "nature_of_requirement": "x" * 6000}},
+        json={"answers": {**VALID, "additional_information": "x" * 6000}},
     )
     assert response.status_code == 422
 
@@ -350,7 +354,10 @@ def test_country_options_come_from_the_served_markets(api: TestClient) -> None:
 
     assert field["options"], "country must offer choices"
     assert field["options"][:4] == [
-        "United Kingdom", "India", "United Arab Emirates", "Oman",
+        "United Kingdom",
+        "India",
+        "United Arab Emirates",
+        "Oman",
     ]
     assert field["options"][-1] == "Other"
 
@@ -367,3 +374,249 @@ def test_unpublishing_a_market_removes_it_from_the_country_field(
     form = api.get("/api/v1/public/forms/enquiry").json()
     field = next(f for f in form["fields"] if f["key"] == "country")
     assert "Oman" not in field["options"]
+
+
+# --- Several services, and the specific services under them --------------------
+
+
+def _catalogue(api: TestClient) -> dict:
+    return api.get("/api/v1/public/enquiry-catalogue").json()
+
+
+def _market(api: TestClient, country: str) -> dict:
+    return next(m for m in _catalogue(api)["markets"] if m["country"] == country)
+
+
+def test_the_form_asks_for_services_not_a_service(api: TestClient) -> None:
+    fields = {f["key"]: f for f in api.get("/api/v1/public/forms/enquiry").json()["fields"]}
+    assert fields["service_required"]["field_type"] == "multiselect"
+    assert fields["sub_services"]["field_type"] == "multiselect"
+    # The free-text box the service pages used to write a sentence into.
+    assert "nature_of_requirement" not in fields
+    assert fields["additional_information"]["is_required"] is False
+
+
+def test_the_catalogue_names_a_service_the_way_its_market_does(api: TestClient) -> None:
+    uk = [s["name"] for s in _market(api, "United Kingdom")["services"]]
+    india = [s["name"] for s in _market(api, "India")["services"]]
+    assert "VAT Services" in uk and "VAT / GST Services" not in uk
+    assert "VAT / GST Services" in india and "VAT Services" not in india
+
+
+def test_a_market_only_lists_what_it_offers(api: TestClient) -> None:
+    uk = [s["name"] for s in _market(api, "United Kingdom")["services"]]
+    india = [s["name"] for s in _market(api, "India")["services"]]
+    assert "CIS Services" in uk, "CIS is a UK scheme"
+    assert "CIS Services" not in india
+
+
+def test_an_enquiry_can_name_several_services_and_specifics(api: TestClient, db: Session) -> None:
+    india = _market(api, "India")
+    vat = next(s for s in india["services"] if s["name"] == "VAT / GST Services")
+    payroll = next(s for s in india["services"] if s["name"] == "Payroll")
+
+    response = api.post(
+        "/api/v1/public/enquiries",
+        json={
+            "answers": {
+                "name": "Asha",
+                "email": "asha@example.com",
+                "country": "India",
+                "service_required": [vat["name"], payroll["name"]],
+                "sub_services": [
+                    vat["sub_services"][0]["value"],
+                    payroll["sub_services"][0]["value"],
+                ],
+            },
+            "website": None,
+        },
+    )
+    assert response.status_code == 201
+
+    row = db.execute(select(Enquiry).where(Enquiry.email == "asha@example.com")).scalar_one()
+    assert row.payload["service_required"] == ["VAT / GST Services", "Payroll"]
+    assert len(row.payload["sub_services"]) == 2
+    # The column exists so the Admin Portal can list without opening the
+    # payload; the payload keeps the answer as it was given.
+    assert row.service_required == "VAT / GST Services, Payroll"
+
+
+def test_a_market_specific_name_is_accepted(api: TestClient) -> None:
+    """Enquiring from India's VAT page used to be refused outright: the page
+    offers "VAT / GST Services" and the check read the raw category name."""
+    response = api.post(
+        "/api/v1/public/enquiries",
+        json={
+            "answers": {
+                "name": "Ravi",
+                "email": "ravi@example.com",
+                "country": "India",
+                "service_required": ["VAT / GST Services"],
+            },
+            "website": None,
+        },
+    )
+    assert response.status_code == 201
+
+
+def test_a_service_that_market_does_not_offer_is_refused(api: TestClient) -> None:
+    response = api.post(
+        "/api/v1/public/enquiries",
+        json={
+            "answers": {
+                "name": "Ravi",
+                "email": "ravi@example.com",
+                "country": "India",
+                "service_required": ["CIS Services"],
+            },
+            "website": None,
+        },
+    )
+    assert response.status_code == 422
+    assert "CIS Services" in response.json()["detail"]
+
+
+def test_a_specific_service_must_belong_to_a_chosen_service(api: TestClient) -> None:
+    uk = _market(api, "United Kingdom")
+    personal = next(s for s in uk["services"] if s["name"] == "Personal Tax")
+
+    response = api.post(
+        "/api/v1/public/enquiries",
+        json={
+            "answers": {
+                "name": "Sam",
+                "email": "sam@example.com",
+                "country": "United Kingdom",
+                "service_required": ["Payroll"],
+                "sub_services": [personal["sub_services"][0]["value"]],
+            },
+            "website": None,
+        },
+    )
+    assert response.status_code == 422
+    assert "not offered under the services you chose" in response.json()["detail"]
+
+
+def test_a_specific_service_from_another_market_is_refused(api: TestClient) -> None:
+    uk = _market(api, "United Kingdom")
+    cis = next(s for s in uk["services"] if s["name"] == "CIS Services")
+    response = api.post(
+        "/api/v1/public/enquiries",
+        json={
+            "answers": {
+                "name": "Sam",
+                "email": "sam@example.com",
+                "country": "India",
+                "service_required": ["Payroll"],
+                "sub_services": [cis["sub_services"][0]["value"]],
+            },
+            "website": None,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_the_service_page_and_the_form_offer_the_same_specifics(api: TestClient) -> None:
+    """An "Enquire" link can only land on an option the form actually has, and
+    both lists come from one place so they cannot drift apart."""
+    regions = api.get("/api/v1/public/regions").json()
+    uk = next(r for r in regions if r["name"] == "United Kingdom")
+    services = api.get(f"/api/v1/public/regions/{uk['slug']}/services").json()["services"]
+
+    catalogue = {s["name"]: s for s in _market(api, "United Kingdom")["services"]}
+    checked = 0
+    for summary in services:
+        detail = api.get(f"/api/v1/public/regions/{uk['slug']}/services/{summary['slug']}").json()
+        offered = [o["label"] for o in catalogue[detail["name"]]["sub_services"]]
+        assert detail["sub_services"] == offered, detail["name"]
+        checked += 1
+    assert checked >= 10
+
+
+def test_the_specifics_are_named_so_two_services_cannot_collide(api: TestClient) -> None:
+    """ "VAT Registration" sits under both VAT Services and Business
+    Registration, so the name alone would not say which was meant."""
+    uk = _market(api, "United Kingdom")
+    values = [o["value"] for s in uk["services"] for o in s["sub_services"]]
+    assert len(values) == len(set(values))
+    for service in uk["services"]:
+        for option in service["sub_services"]:
+            assert option["value"] == f"{service['name']} — {option['label']}"
+            assert option["label"] in option["value"]
+
+
+def test_an_answer_the_person_never_saw_is_refused(api: TestClient) -> None:
+    response = api.post(
+        "/api/v1/public/enquiries",
+        json={
+            "answers": {
+                "name": "Bot",
+                "email": "bot@example.com",
+                "service_required": ["Something Invented"],
+            },
+            "website": None,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_the_notification_lists_every_service_chosen(api: TestClient, db: Session) -> None:
+    set_setting(db, SettingKey.NOTIFY_ENQUIRY_RECIPIENTS, ["team@smartaware.example"])
+    db.commit()
+    uk = _market(api, "United Kingdom")
+    personal = next(s for s in uk["services"] if s["name"] == "Personal Tax")
+
+    api.post(
+        "/api/v1/public/enquiries",
+        json={
+            "answers": {
+                "name": "Jo",
+                "email": "jo@example.com",
+                "country": "United Kingdom",
+                "service_required": ["Personal Tax", "Payroll"],
+                "sub_services": [personal["sub_services"][0]["value"]],
+                "additional_information": "Whenever suits you.",
+            },
+            "website": None,
+        },
+    )
+    body = console_backend.sent[-1].body
+    assert "Personal Tax, Payroll" in body
+    assert personal["sub_services"][0]["value"] in body
+    assert "Whenever suits you." in body
+
+
+def test_the_public_form_omits_a_retired_field(api: TestClient, db: Session) -> None:
+    field = _enquiry_field(db, "additional_information")
+    field.is_active = False
+    db.commit()
+
+    keys = [f["key"] for f in api.get("/api/v1/public/forms/enquiry").json()["fields"]]
+    assert "additional_information" not in keys
+
+
+def test_the_admin_form_shows_a_retired_field_so_it_can_come_back(
+    api: TestClient, db: Session, admin_headers
+) -> None:
+    """Otherwise switching one off is a one-way door, and the answers older
+    enquiries hold under its key have nothing left to label them."""
+    retired = _enquiry_field(db, "additional_information")
+    retired.is_active = False
+    db.commit()
+
+    fields = {
+        f["key"]: f
+        for f in api.get("/api/v1/admin/forms/enquiry", headers=admin_headers).json()["fields"]
+    }
+    assert fields["additional_information"]["is_active"] is False
+    assert fields["additional_information"]["label"] == "Additional Information"
+    assert fields["name"]["is_active"] is True
+
+    restored = api.patch(
+        f"/api/v1/admin/forms/fields/{fields['additional_information']['id']}",
+        json={"is_active": True},
+        headers=admin_headers,
+    )
+    assert restored.status_code == 200
+    keys = [f["key"] for f in api.get("/api/v1/public/forms/enquiry").json()["fields"]]
+    assert "additional_information" in keys
