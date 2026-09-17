@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
-from app.models.enums import ChatRole, ChatSurface
 
 
 class FaqEntryOut(BaseModel):
@@ -43,42 +42,29 @@ class FaqIndexStatus(BaseModel):
     last_indexed_at: datetime | None
 
 
+class ChatTurn(BaseModel):
+    """One turn of the conversation, as the asker's browser holds it.
+
+    History arrives with the question rather than being looked up, because
+    there is nothing to look it up in: the server keeps no transcript. It is
+    capped and re-cleaned server-side all the same — anything a caller sends is
+    a claim, not a record.
+    """
+
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
-    #: Continues an existing conversation. Issued by the server on first ask.
-    session_token: str | None = Field(default=None, max_length=128)
+    history: list[ChatTurn] = Field(
+        default_factory=list,
+        max_length=12,
+        description="Earlier turns, oldest first. Held by the browser, never stored here.",
+    )
 
 
 class AskResponse(BaseModel):
-    session_token: str
     answer: str
     escalated: bool
-    #: Present so the escalation threshold can be tuned against real traffic.
-    top_similarity: float | None
-
-
-class ChatMessageOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    role: ChatRole
-    content: str
-    escalated: bool
-    top_similarity: float | None
-    created_at: datetime
-
-
-class ChatSessionOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    surface: ChatSurface
-    user_id: uuid.UUID | None
-    client_id: uuid.UUID | None
-    created_at: datetime
-    last_activity_at: datetime | None
-    message_count: int = 0
-
-
-class ChatSessionDetail(ChatSessionOut):
-    messages: list[ChatMessageOut] = Field(default_factory=list)
+    top_similarity: float | None = None

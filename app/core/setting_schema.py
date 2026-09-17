@@ -57,27 +57,6 @@ SETTING_SPECS: dict[str, SettingSpec] = {
         minimum=1,
         maximum=20,
     ),
-    SettingKey.CHAT_RETENTION_DAYS: SettingSpec(
-        control="number",
-        label="Chat transcript retention",
-        minimum=1,
-        maximum=3650,
-        unit="days",
-        hint="Transcripts older than this are deleted by the nightly job.",
-        confirm=(
-            "Shortening this deletes transcripts already older than the new "
-            "window the next time the cleanup job runs. That cannot be undone."
-        ),
-    ),
-    SettingKey.CHAT_LOGS_VISIBLE_TO: SettingSpec(
-        control="choice",
-        label="Who can read chat transcripts",
-        choices=(
-            ("admin", "Administrators only"),
-            ("admin_and_manager", "Administrators and managers"),
-            ("nobody", "Nobody"),
-        ),
-    ),
     SettingKey.INVITE_EXPIRY_DAYS: SettingSpec(
         control="number",
         label="Invitation link expiry",

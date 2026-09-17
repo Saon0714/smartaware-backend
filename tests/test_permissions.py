@@ -49,7 +49,6 @@ def _clear_settings_cache() -> None:
         (UserRole.CLIENT, Permission.CLIENT_ASSIGN_MANAGER, False),
         (UserRole.CLIENT, Permission.INVOICE_MANAGE, False),
         (UserRole.CLIENT, Permission.CONTENT_MANAGE, False),
-        (UserRole.CLIENT, Permission.CHAT_LOGS_VIEW, False),
     ],
 )
 def test_role_permission_matrix(

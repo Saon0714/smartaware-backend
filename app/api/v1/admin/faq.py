@@ -10,17 +10,11 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import selectinload
 
-from app.core.deps import CurrentUser, DbSession, require_permission
+from app.core.deps import DbSession, require_permission
 from app.core.permissions import Permission
-from app.core.settings_service import SettingKey, get_setting
-from app.models.chat import ChatMessage, ChatSession
-from app.models.enums import UserRole
 from app.models.faq import FaqEmbedding, FaqEntry
 from app.schemas.chat import (
-    ChatSessionDetail,
-    ChatSessionOut,
     FaqEntryOut,
     FaqEntryWrite,
     FaqIndexStatus,
@@ -164,83 +158,4 @@ def index_status(db: DbSession) -> FaqIndexStatus:
         pending=pending,
         retired=retired,
         last_indexed_at=last,
-    )
-
-
-# --- Chat transcripts (Section 13 item 8) ---------------------------------------
-
-
-def _assert_may_read_logs(db, user) -> None:
-    """Visibility is a setting, defaulted to Admin only."""
-    allowed = get_setting(db, SettingKey.CHAT_LOGS_VISIBLE_TO, "admin")
-    if allowed == "nobody":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Chat transcript access is disabled.",
-        )
-    if allowed == "admin" and user.role is not UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only an administrator may read chat transcripts.",
-        )
-    if allowed == "admin_and_manager" and user.role not in (
-        UserRole.ADMIN,
-        UserRole.MANAGER,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to read chat transcripts.",
-        )
-
-
-@router.get("/chat-sessions", response_model=list[ChatSessionOut], name="list_sessions")
-def list_sessions(
-    user: CurrentUser,
-    db: DbSession,
-    escalated_only: Annotated[bool, Query()] = False,
-) -> Any:
-    _assert_may_read_logs(db, user)
-
-    counts = (
-        select(ChatMessage.session_id, func.count().label("n"))
-        .group_by(ChatMessage.session_id)
-        .subquery()
-    )
-    stmt = (
-        select(ChatSession, func.coalesce(counts.c.n, 0))
-        .outerjoin(counts, counts.c.session_id == ChatSession.id)
-        .order_by(ChatSession.created_at.desc())
-    )
-    if escalated_only:
-        escalations = select(ChatMessage.session_id).where(ChatMessage.escalated.is_(True))
-        stmt = stmt.where(ChatSession.id.in_(escalations))
-
-    return [
-        ChatSessionOut.model_validate(session).model_copy(update={"message_count": count})
-        for session, count in db.execute(stmt).all()
-    ]
-
-
-@router.get(
-    "/chat-sessions/{session_id}",
-    response_model=ChatSessionDetail,
-    name="get_session",
-)
-def get_session(session_id: uuid.UUID, user: CurrentUser, db: DbSession) -> Any:
-    _assert_may_read_logs(db, user)
-
-    session = db.execute(
-        select(ChatSession)
-        .where(ChatSession.id == session_id)
-        .options(selectinload(ChatSession.messages))
-    ).scalar_one_or_none()
-    if session is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
-
-    detail = ChatSessionDetail.model_validate(session)
-    return detail.model_copy(
-        update={
-            "message_count": len(session.messages),
-            "messages": sorted(session.messages, key=lambda m: m.created_at),
-        }
     )

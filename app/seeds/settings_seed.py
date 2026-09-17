@@ -36,26 +36,6 @@ SETTINGS_DEFAULTS: list[dict] = [
         "group": "chatbot",
         "description": "Number of FAQ chunks retrieved per question.",
     },
-    {
-        "key": "chat_retention_days",
-        "value": 30,
-        "value_type": T.INTEGER,
-        "group": "chatbot",
-        "description": (
-            "Days to retain chat transcripts before the nightly purge. "
-            "Spec Section 4.5 default: 1 month."
-        ),
-    },
-    {
-        "key": "chat_logs_visible_to",
-        "value": "admin",
-        "value_type": T.STRING,
-        "group": "chatbot",
-        "description": (
-            "Who may read chat transcripts: 'admin', 'admin_and_manager' or 'nobody'. "
-            "ASSUMED DEFAULT (Section 13 item 8)."
-        ),
-    },
     # --- Accounts and access ---
     {
         "key": "invite_expiry_days",

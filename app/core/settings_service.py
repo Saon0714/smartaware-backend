@@ -34,9 +34,7 @@ class SettingKey:
     CHAT_SIMILARITY_THRESHOLD = "chat_similarity_threshold"
     CHAT_TOP_K = "chat_top_k"
     # Section 4.5 — conversation retention
-    CHAT_RETENTION_DAYS = "chat_retention_days"
     # Section 13 item 8 — who may read chat transcripts
-    CHAT_LOGS_VISIBLE_TO = "chat_logs_visible_to"
     # Section 5.1 — invite expiry
     INVITE_EXPIRY_DAYS = "invite_expiry_days"
     # Section 13 item 4 — single vs. multiple admins

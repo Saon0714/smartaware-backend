@@ -64,16 +64,6 @@ class ReconciliationMethod(enum.StrEnum):
     AUTOMATED = "automated"
 
 
-class ChatSurface(enum.StrEnum):
-    PUBLIC = "public"
-    PORTAL = "portal"
-
-
-class ChatRole(enum.StrEnum):
-    USER = "user"
-    ASSISTANT = "assistant"
-
-
 class FormFieldType(enum.StrEnum):
     TEXT = "text"
     TEXTAREA = "textarea"

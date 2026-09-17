@@ -5,9 +5,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.settings_service import SettingKey, invalidate, set_setting
-from app.models.enums import ChatSurface, UserRole
+from app.models.enums import UserRole
 from app.models.faq import FaqEntry
-from app.services.rag import chat as chat_service
 
 
 @pytest.fixture(autouse=True)
@@ -126,57 +125,14 @@ def test_client_and_anonymous_cannot_manage_faq(api: TestClient, make_user, logi
     assert api.get("/api/v1/admin/faq").status_code == 401
 
 
-# --- Chat transcript visibility (Section 13 item 8) --------------------------------
+# --- Transcripts, which no longer exist -------------------------------------------
 
 
-@pytest.fixture
-def a_conversation(api: TestClient, db: Session, ai) -> None:
-    chat_service.ask(
-        db,
-        question="Hello",
-        session_token=None,
-        surface=ChatSurface.PUBLIC,
-        client=ai,
-    )
+def test_the_transcript_endpoints_are_gone(api: TestClient, admin_headers) -> None:
+    """Not forbidden — absent. Nothing is recorded for them to have served."""
+    assert api.get("/api/v1/admin/chat-sessions", headers=admin_headers).status_code == 404
 
 
-def test_admin_may_read_transcripts_by_default(
-    api: TestClient, a_conversation, admin_headers
-) -> None:
-    rows = api.get("/api/v1/admin/chat-sessions", headers=admin_headers).json()
-    assert len(rows) == 1
-    assert rows[0]["message_count"] == 2
-
-    detail = api.get(f"/api/v1/admin/chat-sessions/{rows[0]['id']}", headers=admin_headers).json()
-    assert [m["role"] for m in detail["messages"]] == ["user", "assistant"]
-
-
-def test_manager_may_not_read_transcripts_by_default(
-    api: TestClient, a_conversation, manager_headers
-) -> None:
-    assert api.get("/api/v1/admin/chat-sessions", headers=manager_headers).status_code == 403
-
-
-def test_manager_may_read_when_the_setting_allows(
-    api: TestClient, db: Session, a_conversation, manager_headers
-) -> None:
-    set_setting(db, SettingKey.CHAT_LOGS_VISIBLE_TO, "admin_and_manager")
-    assert api.get("/api/v1/admin/chat-sessions", headers=manager_headers).status_code == 200
-
-
-def test_nobody_can_read_when_disabled(
-    api: TestClient, db: Session, a_conversation, admin_headers
-) -> None:
-    """Including the administrator — the setting means what it says."""
-    set_setting(db, SettingKey.CHAT_LOGS_VISIBLE_TO, "nobody")
-    assert api.get("/api/v1/admin/chat-sessions", headers=admin_headers).status_code == 403
-
-
-def test_client_can_never_read_transcripts(
-    api: TestClient, a_conversation, make_user, login
-) -> None:
-    make_user(UserRole.CLIENT, email="client@example.com")
-    assert (
-        api.get("/api/v1/admin/chat-sessions", headers=login("client@example.com")).status_code
-        == 403
-    )
+def test_no_route_offers_a_transcript(api: TestClient) -> None:
+    paths = api.get("/openapi.json").json()["paths"]
+    assert not [path for path in paths if "chat-session" in path or "chat-log" in path]

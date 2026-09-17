@@ -193,6 +193,9 @@ class StubAiClient:
     def __init__(self) -> None:
         self.embed_calls: list[list[str]] = []
         self.answer_calls: list[tuple[str, str]] = []
+        #: The conversation each call was given. Nothing records it any more,
+        #: so this is the only place a test can see what reached the model.
+        self.history_seen: list[list[dict]] = []
         self.fail_embed = False
         self.fail_answer = False
 
@@ -222,6 +225,7 @@ class StubAiClient:
         if self.fail_answer:
             raise RuntimeError("completion failed")
         self.answer_calls.append((question, context))
+        self.history_seen.append(list(history))
         return f"Answer grounded in FAQ. [context chars: {len(context)}]"
 
 

@@ -76,7 +76,6 @@ worker and beat together.
 | `make revision m="..."` | Create a migration |
 | `make worker` / `make beat` | Celery worker / scheduler |
 | `uv run python scripts/run_job.py reindex-faq` | Run the FAQ index now |
-| `uv run python scripts/run_job.py purge-chat-logs` | Run the retention purge now |
 
 ## Architecture notes
 
@@ -113,7 +112,6 @@ Two jobs run nightly under Celery beat:
 | Job | Schedule | Purpose |
 |---|---|---|
 | `faq.reindex` | 02:30 UTC | Incremental FAQ embedding (spec 4.4) |
-| `chat.purge_logs` | 03:30 UTC | Delete transcripts past the retention window (spec 4.5) |
 
 The re-index is strictly incremental: it embeds only entries whose `updated_at`
 is newer than their `indexed_at`, removes embeddings for soft-deleted or

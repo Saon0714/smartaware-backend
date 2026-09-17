@@ -45,13 +45,6 @@ def reindex_faq_task(self):
         raise self.retry(exc=exc, countdown=300) from exc
 
 
-@celery_app.task(name="chat.purge_logs")
-def purge_chat_logs_task():
-    from app.jobs.purge_chat_logs import run
-
-    return run()
-
-
 celery_app.conf.beat_schedule = {
     # Nightly and incremental. It runs every night even when nothing changed —
     # Section 4.4 requires a no-op run rather than a skipped one, so a late
@@ -59,9 +52,5 @@ celery_app.conf.beat_schedule = {
     "reindex-faq-nightly": {
         "task": "faq.reindex",
         "schedule": crontab(hour=2, minute=30),
-    },
-    "purge-chat-logs-nightly": {
-        "task": "chat.purge_logs",
-        "schedule": crontab(hour=3, minute=30),
     },
 }

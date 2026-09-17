@@ -69,7 +69,6 @@ class Permission(enum.StrEnum):
     SETTINGS_MANAGE = "settings:manage"
     USER_MANAGE = "user:manage"
     ENQUIRY_VIEW = "enquiry:view"
-    CHAT_LOGS_VIEW = "chat_logs:view"
     AUDIT_VIEW = "audit:view"
 
 

@@ -1,7 +1,6 @@
 """Run a scheduled job by hand.
 
     uv run python scripts/run_job.py reindex-faq
-    uv run python scripts/run_job.py purge-chat-logs
 
 Useful for verifying a job without waiting for beat, and for the first index
 after seeding FAQ content.
@@ -15,7 +14,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 JOBS = {
     "reindex-faq": "app.jobs.reindex_faq",
-    "purge-chat-logs": "app.jobs.purge_chat_logs",
 }
 
 

@@ -18,12 +18,10 @@ def test_section_13_defaults_are_seeded(seeded_db: Session) -> None:
     # Measured against the seeded FAQ rather than guessed — see the setting's
     # description for the observed relevant/irrelevant separation.
     assert get_setting(seeded_db, SettingKey.CHAT_SIMILARITY_THRESHOLD) == 0.35
-    assert get_setting(seeded_db, SettingKey.CHAT_RETENTION_DAYS) == 30
     assert get_setting(seeded_db, SettingKey.INVITE_EXPIRY_DAYS) == 3
     assert get_setting(seeded_db, SettingKey.ALLOW_MULTIPLE_ADMINS) is False
     assert get_setting(seeded_db, SettingKey.MANAGER_CLIENT_SCOPE) == "assigned"
     assert get_setting(seeded_db, SettingKey.MANAGER_CAN_MANAGE_CONTENT) is False
-    assert get_setting(seeded_db, SettingKey.CHAT_LOGS_VISIBLE_TO) == "admin"
     assert get_setting(seeded_db, SettingKey.DOCUMENT_VERSIONING) == "keep"
     assert get_setting(seeded_db, SettingKey.MFA_REQUIRED_ROLES) == []
 
