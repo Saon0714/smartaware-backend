@@ -56,6 +56,13 @@ class Invoice(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # URL is always rebuilt by app.services.payment_link from live invoice data.
     wise_payment_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # The invoice itself, as shared with the client. Nullable because the
+    # figures are the invoice as far as paying is concerned — a client can be
+    # asked for £500 against a reference before anyone attaches a PDF of it.
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
+
     # The Wise receipt the client uploads back into the portal (spec 5.3.D).
     receipt_document_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True

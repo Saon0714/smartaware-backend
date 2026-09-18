@@ -98,7 +98,9 @@ class Settings(BaseSettings):
     # dashboard. We only ever append query params to it. There is deliberately
     # no Wise API credential here: creating payment links via the Wise API is
     # unsupported and must not be built.
-    WISE_PAYMENT_LINK_BASE_URL: str = "https://wise.com/pay/business/smartaware"
+    # Empty by default. A plausible-looking placeholder would put a live Pay
+    # Now button in front of clients pointing at a page that does not exist.
+    WISE_PAYMENT_LINK_BASE_URL: str = ""
 
     @property
     def is_production(self) -> bool:
