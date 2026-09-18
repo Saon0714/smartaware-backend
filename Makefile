@@ -1,4 +1,4 @@
-.PHONY: install dev test lint fmt typecheck openapi migrate revision worker beat db-create
+.PHONY: install dev test lint fmt typecheck openapi migrate revision update worker beat db-create
 
 install:          ## Sync dependencies from uv.lock
 	uv sync
@@ -26,6 +26,9 @@ migrate:          ## Apply migrations
 
 revision:         ## make revision m="add widgets"
 	uv run alembic revision --autogenerate -m "$(m)"
+
+update:           ## After a git pull: apply migrations, then seed. Idempotent.
+	uv run python scripts/update.py
 
 worker:
 	uv run celery -A app.worker.celery_app worker --loglevel=info

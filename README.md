@@ -19,9 +19,13 @@ OpenAPI schema this service publishes at `/openapi.json`.
 Run this first, every time:
 
 ```bash
-uv run alembic upgrade head
-uv run python scripts/seed.py
+make update          # or: uv run python scripts/update.py
 ```
+
+It applies any migrations, then seeds any reference rows that are missing, in
+that order — a migration can add the table the seeder is about to write to. It
+prints which migrations it applied and what it inserted, and is safe to re-run:
+on a database that is already current it applies nothing and says so.
 
 A pull that brings new columns leaves an existing database a migration short,
 and the only symptom is `500` on every page that reads a changed table. The API

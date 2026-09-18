@@ -147,14 +147,22 @@ present.
 ```powershell
 cd C:\smartaware\smartaware-backend
 docker compose up -d --build
-docker compose exec api uv run alembic upgrade head
-docker compose exec api uv run python scripts/seed.py
+docker compose exec api uv run python scripts/update.py
 ```
 
-Skipping the migration is the usual cause of the website showing an error where
-content should be: the code expects a column the database does not have yet.
+That one command is the whole database side of a pull. It applies any
+migrations, then seeds any reference rows that are missing, and prints what it
+did. Re-running it is safe — on a database that is already current it applies
+nothing and says so.
+
+Skipping it is the usual cause of the website showing an error where content
+should be: the code expects a column the database does not have yet.
 `docker compose logs api` says so in as many words at startup, and
 <http://localhost:8000/api/v1/health> reports `schema_status`.
+
+It is also worth running after the very first `docker compose up`, in place of
+the two commands in step 5 — the only thing it does not do is create your
+administrator account, which it will tell you about.
 
 Then, in the frontend folder, `npm install` and `npm run dev` again.
 
