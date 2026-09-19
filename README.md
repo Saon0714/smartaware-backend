@@ -81,6 +81,31 @@ worker and beat together.
 | `make worker` / `make beat` | Celery worker / scheduler |
 | `uv run python scripts/run_job.py reindex-faq` | Run the FAQ index now |
 
+## Accounts
+
+Nobody can invite the first Admin, so it is created from the console:
+
+```bash
+uv run python scripts/create_admin.py --email you@example.com --generate
+```
+
+`allow_multiple_admins` is False by default, so a second one is refused rather
+than quietly created (Section 13 item 4).
+
+When the credentials for that account are lost, the portal is no help —
+signing in is what is broken. `scripts/reset_admin.py` reads the database
+directly:
+
+```bash
+uv run python scripts/reset_admin.py                  # who the Admins are
+uv run python scripts/reset_admin.py --set-password   # keep the account
+uv run python scripts/reset_admin.py --delete --yes   # remove it
+```
+
+It reports and changes nothing unless told to, and `--delete` is a dry run
+until `--yes` follows it: removing the only Admin locks everybody out until
+`create_admin.py` runs again.
+
 ## Architecture notes
 
 **Permissions are enforced here, never in the frontend.** The frontend's

@@ -76,13 +76,27 @@ The first build takes 5-10 minutes. It is done when all five services report
 One time only. Run each command and wait for it to finish.
 
 ```powershell
-docker compose exec api uv run alembic upgrade head
-docker compose exec api uv run python scripts/seed.py
+docker compose exec api uv run python scripts/update.py
 docker compose exec api uv run python scripts/create_admin.py --email you@example.com --generate
 ```
 
-**The third command prints a generated password once.** Save it before
+**The second command prints a generated password once.** Save it before
 closing the window; the account is forced to change it at first login.
+
+### Locked out of that account
+
+If the address or the password is lost, nothing in the portal can help —
+signing in is the thing that is not working. Ask the database instead:
+
+```powershell
+docker compose exec api uv run python scripts/reset_admin.py
+```
+
+That lists the Admin accounts and changes nothing, which is often the whole
+fix: a forgotten address and a forgotten password are different losses. If the
+address is enough, `--set-password` issues a new temporary one. If neither is
+recoverable, `--delete --yes` removes the account and `create_admin.py` makes
+the replacement.
 
 Check <http://localhost:8000/docs> — the endpoint list means the API is up.
 

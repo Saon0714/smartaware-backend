@@ -32,6 +32,10 @@ class AuditAction:
     DOCUMENT_DOWNLOADED = "document.downloaded"
     INVOICE_RECONCILED = "invoice.reconciled"
     USER_DEACTIVATED = "user.deactivated"
+    # Console actions. They have no actor — nobody was signed in to perform
+    # them — so the entry is the only trace that the account ever existed.
+    USER_DELETED = "user.deleted"
+    USER_PASSWORD_RESET = "user.password_reset"
 
 
 def record(
